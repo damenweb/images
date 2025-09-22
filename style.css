@@ -1,81 +1,401 @@
+/* General Styling */
 body {
     font-family: Arial, sans-serif;
-    margin: 20px;
-    background-color: #f4f4f4;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f7f6;
     color: #333;
+    display: flex;
+    min-height: 100vh;
+    overflow: hidden; /* Prevent body scroll */
 }
 
 .container {
-    max-width: 1200px;
-    margin: auto;
-    background: #fff;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
 }
 
-h1 {
-    text-align: center;
-    color: #0056b3;
+/* Header */
+.header {
+    background-color: #2c3e50;
+    color: #ecf0f1;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 100; /* Ensure header is on top */
 }
 
-button {
-    padding: 10px 20px;
-    margin: 10px 5px;
+.app-title {
+    margin: 0;
+    font-size: 1.8em;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* Buttons */
+.button {
+    padding: 10px 18px;
     border: none;
-    border-radius: 5px;
-    background-color: #007bff;
-    color: white;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 0.9em;
+    transition: background-color 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
 }
 
-button:hover {
-    background-color: #0056b3;
+.primary-button {
+    background-color: #3498db;
+    color: white;
 }
 
-button:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
+.primary-button:hover {
+    background-color: #2980b9;
 }
 
+.secondary-button {
+    background-color: #95a5a6;
+    color: white;
+}
+
+.secondary-button:hover {
+    background-color: #7f8c8d;
+}
+
+.icon-button {
+    background: none;
+    color: #ecf0f1;
+    padding: 8px;
+}
+
+.icon-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Loading Indicator */
 .loading-indicator {
+    font-size: 0.9em;
+    color: #ecf0f1;
+    margin-left: 10px;
+}
+
+.loading-indicator.hidden {
     display: none;
-    text-align: center;
-    margin: 20px 0;
-    font-size: 1.2em;
+}
+
+/* Settings Panel */
+.settings-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 350px;
+    height: 100%;
+    background-color: #f4f7f6;
+    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    box-sizing: border-box;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 200; /* Higher than main content */
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.settings-panel.hidden {
+    transform: translateX(100%);
+}
+
+.settings-panel.visible {
+    transform: translateX(0);
+}
+
+.settings-panel h2 {
+    margin-top: 0;
+    color: #2c3e50;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
     color: #555;
 }
 
-table {
+.text-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+}
+
+.token-input-wrapper {
+    display: flex;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.token-input-wrapper .text-input {
+    flex-grow: 1;
+    border: none;
+    padding: 10px;
+}
+
+.token-input-wrapper .show-token-button {
+    background-color: #ecf0f1;
+    color: #7f8c8d;
+    border-left: 1px solid #ccc;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 1.2em;
+}
+
+.token-input-wrapper .show-token-button:hover {
+    background-color: #e0e6e7;
+}
+
+/* Main Content Layout */
+.main-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden; /* For inner scrolling */
+}
+
+/* Sidebar Navigation */
+.sidebar-nav {
+    width: 280px;
+    background-color: #ecf0f1;
+    padding: 20px;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+    overflow-y: auto; /* Scrollable sidebar */
+    flex-shrink: 0;
+}
+
+.sidebar-nav h3 {
+    margin-top: 0;
+    color: #2c3e50;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.story-tree {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.story-tree ul {
+    list-style-type: none;
+    padding-left: 20px; /* Indent nested items */
+    margin: 0;
+}
+
+.story-tree li {
+    margin-bottom: 5px;
+}
+
+.tree-node {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 5px 0;
+    color: #333;
+    transition: background-color 0.2s ease;
+}
+
+.tree-node:hover {
+    background-color: #e0e6e7;
+}
+
+.tree-node.selected {
+    background-color: #d0d7da;
+    font-weight: bold;
+}
+
+.tree-toggle-icon {
+    margin-right: 5px;
+    font-weight: bold;
+    color: #555;
+    width: 15px;
+    text-align: center;
+}
+
+.tree-item-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-grow: 1;
+}
+
+.tree-node-content.collapsed > ul {
+    display: none;
+}
+
+/* Main Data Area (Table) */
+.data-area {
+    flex-grow: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* For inner table scrolling */
+}
+
+.table-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.main-table-container {
+    flex-grow: 1;
+    overflow: auto; /* Scroll for the main table */
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+}
+
+.main-story-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 20px;
+    min-width: 800px; /* Ensure table doesn't get too narrow */
 }
 
-table, th, td {
-    border: 1px solid #ddd;
-}
-
-th, td {
-    padding: 10px;
+.main-story-table th,
+.main-story-table td {
+    padding: 12px 15px;
     text-align: left;
+    border-bottom: 1px solid #eee;
 }
 
-th {
-    background-color: #f2f2f2;
-    color: #333;
+.main-story-table th {
+    background-color: #f8f8f8;
+    color: #555;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 10; /* Keep header visible on scroll */
 }
 
-tr:nth-child(even) {
-    background-color: #f9f9f9;
+.main-story-table tbody tr:hover {
+    background-color: #f5f5f5;
 }
 
-a {
-    color: #007bff;
+.main-story-table a {
+    color: #3498db;
     text-decoration: none;
 }
 
-a:hover {
+.main-story-table a:hover {
     text-decoration: underline;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.placeholder-text {
+    text-align: center;
+    color: #7f8c8d;
+    padding: 20px;
+}
+
+/* Detail Row for Images */
+.detail-row {
+    background-color: #fdfdfd;
+}
+
+.detail-row td {
+    padding: 0;
+    border-bottom: 1px solid #eee;
+}
+
+.image-details-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.image-details-table th,
+.image-details-table td {
+    padding: 10px 15px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+}
+
+.image-details-table th {
+    background-color: #fafafa;
+    font-weight: normal;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.image-details-table tr:last-child td {
+    border-bottom: none;
+}
+
+.image-thumbnail-wrapper {
+    width: 80px; /* Fixed width for image column */
+    height: 60px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #eee;
+    border-radius: 3px;
+    background-color: #fff;
+}
+
+.image-thumbnail {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.editable-field {
+    border: 1px solid #ccc;
+    padding: 8px;
+    border-radius: 3px;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.9em;
+    font-family: Arial, sans-serif;
+}
+
+.editable-field:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.editable-field[readonly] {
+    border: none;
+    background-color: transparent;
+    cursor: default;
+    padding: 8px 0;
+}
+
+.action-cell {
+    white-space: nowrap;
 }
