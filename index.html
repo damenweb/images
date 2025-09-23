@@ -3,75 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Storyblok Asset Manager</title>
+    <title>Storyblok Image Manager</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <!-- Settings Panel -->
-        <aside id="settings-panel" class="settings-panel hidden">
-            <h2>Settings</h2>
-            <div class="form-group">
-                <label for="storyblok-token">Storyblok MAPI Token:</label>
-                <div class="token-input-wrapper">
-                    <input type="password" id="storyblok-token" class="text-input" placeholder="Enter your token">
-                    <button id="toggle-token-visibility" class="icon-button show-token-button" title="Show/Hide Token">&#128065;</button>
-                </div>
-                <button id="save-token" class="button primary-button">Save Token</button>
-            </div>
-            <button id="close-settings" class="button secondary-button">Close</button>
-        </aside>
-
-        <!-- Main Header -->
+    <div id="app">
         <header class="header">
-            <h1 class="app-title">Storyblok Asset Manager</h1>
+            <h1>Storyblok Image Manager</h1>
             <div class="header-actions">
-                <button id="settings-button" class="button icon-button" title="Settings">&#9881; Settings</button>
-                <button id="connect-button" class="button primary-button">Connect to Storyblok</button>
-                <span id="loading-indicator" class="loading-indicator hidden">Loading...</span>
+                <button id="connectBtn" class="btn primary-btn">Connect to Storyblok</button>
+                <button id="settingsBtn" class="btn secondary-btn">Settings</button>
             </div>
         </header>
 
-        <!-- Main Content Area -->
-        <div class="main-content">
-            <!-- Sidebar Navigation -->
-            <nav id="sidebar-nav" class="sidebar-nav">
-                <h3>Story Navigation</h3>
-                <div id="story-tree" class="story-tree">
-                    <!-- Story tree will be loaded here by JavaScript -->
-                    <p class="placeholder-text">Connect to Storyblok to load navigation.</p>
+        <div id="settingsPanel" class="settings-panel hidden">
+            <div class="settings-content">
+                <h2>Settings</h2>
+                <div class="form-group">
+                    <label for="storyblokToken">Storyblok MAPI Token:</label>
+                    <div class="token-input-wrapper">
+                        <input type="password" id="storyblokToken" placeholder="Enter your MAPI token">
+                        <button id="toggleTokenVisibility" class="btn icon-btn">
+                            <span class="icon-eye-closed"></span>
+                        </button>
+                    </div>
                 </div>
-            </nav>
+                <div class="settings-actions">
+                    <button id="saveSettingsBtn" class="btn primary-btn">Save</button>
+                    <button id="closeSettingsBtn" class="btn secondary-btn">Close</button>
+                </div>
+            </div>
+        </div>
 
-            <!-- Main Table Area -->
-            <main class="data-area">
-                <div class="table-controls">
-                    <button id="toggle-all-details" class="button secondary-button hidden">Expand/Collapse All Images</button>
-                    <button id="toggle-edit-mode" class="button secondary-button hidden">Enable Editing</button>
-                    <button id="send-to-server" class="button primary-button hidden">Send Changes to Server</button>
-                    <span id="table-loading-indicator" class="loading-indicator hidden">Loading Table...</span>
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Stories</h2>
+                    <div id="loadingIndicatorSidebar" class="loading-indicator hidden">Loading...</div>
                 </div>
-                <div id="main-table-container" class="main-table-container">
-                    <table id="main-story-table" class="main-story-table">
+                <div id="storyList" class="story-list custom-scrollbar">
+                    <!-- Story items will be rendered here -->
+                    <p class="placeholder-text">Click "Connect to Storyblok" to load stories.</p>
+                </div>
+            </aside>
+
+            <main class="content-area">
+                <div class="content-header">
+                    <h2 id="currentStoryTitle">Select a Story to View Images</h2>
+                    <div class="content-actions">
+                        <button id="toggleEditBtn" class="btn secondary-btn" disabled>Toggle Edit Mode</button>
+                        <button id="sendToServerBtn" class="btn primary-btn" disabled>Send to Server</button>
+                    </div>
+                </div>
+                <div id="loadingIndicatorMain" class="loading-indicator hidden">Loading...</div>
+                <div id="imageTableContainer" class="image-table-container custom-scrollbar">
+                    <table id="imageTable" class="image-table">
                         <thead>
                             <tr>
-                                <th class="hidden">Weblink (Hidden)</th>
-                                <th>Story Name</th>
-                                <th>Storyblok Link</th>
-                                <th>Actions</th>
+                                <th>Image</th>
+                                <th>Bynder Link</th>
+                                <th>Parent Field</th>
+                                <th>File Name</th>
+                                <th>ALT Text</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Story rows will be loaded here by JavaScript -->
+                            <!-- Image rows will be rendered here -->
                             <tr>
-                                <td colspan="4" class="placeholder-text">Select a story from the navigation or connect to Storyblok to populate.</td>
+                                <td colspan="5" class="table-placeholder">No story selected or no images found.</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </main>
         </div>
+
+        <div id="modalOverlay" class="modal-overlay hidden">
+            <div class="modal">
+                <h3 id="modalTitle"></h3>
+                <p id="modalMessage"></p>
+                <button id="modalCloseBtn" class="btn primary-btn">Close</button>
+            </div>
+        </div>
     </div>
-    <script src="script.js"></script>
+	    <script src="script.js"></script>
 </body>
 </html>

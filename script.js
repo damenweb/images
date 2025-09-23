@@ -1,164 +1,158 @@
+// --- START OF FILE script.js ---
+
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
-    const settingsPanel = document.getElementById('settings-panel');
-    const settingsButton = document.getElementById('settings-button');
-    const closeSettingsButton = document.getElementById('close-settings');
-    const storyblokTokenInput = document.getElementById('storyblok-token');
-    const toggleTokenVisibilityButton = document.getElementById('toggle-token-visibility');
-    const saveTokenButton = document.getElementById('save-token');
-    const connectButton = document.getElementById('connect-button');
-    const loadingIndicator = document.getElementById('loading-indicator');
-    const tableLoadingIndicator = document.getElementById('table-loading-indicator');
-    const storyTree = document.getElementById('story-tree');
-    const mainStoryTableBody = document.getElementById('main-story-table').querySelector('tbody');
-    const toggleAllDetailsButton = document.getElementById('toggle-all-details');
-    const toggleEditModeButton = document.getElementById('toggle-edit-mode');
-    const sendToServerButton = document.getElementById('send-to-server');
+    const connectBtn = document.getElementById('connectBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const storyblokTokenInput = document.getElementById('storyblokToken');
+    const toggleTokenVisibilityBtn = document.getElementById('toggleTokenVisibility');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    const storyList = document.getElementById('storyList');
+    const loadingIndicatorSidebar = document.getElementById('loadingIndicatorSidebar');
+    const loadingIndicatorMain = document.getElementById('loadingIndicatorMain');
+    const currentStoryTitle = document.getElementById('currentStoryTitle');
+    const imageTable = document.getElementById('imageTable');
+    const imageTableBody = imageTable.querySelector('tbody');
+    const toggleEditBtn = document.getElementById('toggleEditBtn');
+    const sendToServerBtn = document.getElementById('sendToServerBtn');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalMessage = document.getElementById('modalMessage');
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
 
     // Constants
     const STORYBLOK_SPACE_ID = '103684';
-    const BASE_API_URL = `https://mapi.storyblok.com/v1/spaces/${STORYBLOK_SPACE_ID}/`;
-    const BASE_DAMEN_URL = 'https://www.damen.com';
-    const BASE_STORYBLOK_APP_URL = `https://app.storyblok.com/#/me/spaces/${STORYBLOK_SPACE_ID}/stories/0/0/`;
-    const BASE_BYNDER_URL = 'https://medialibrary.damen.com/media/?mediaId=';
-    const TOKEN_STORAGE_KEY = 'storyblokMapiToken';
+    const BASE_MAPI_URL = `https://mapi.storyblok.com/v1/spaces/${STORYBLOK_SPACE_ID}`;
+    const STORYBLOK_APP_URL = `https://app.storyblok.com/#/me/spaces/${STORYBLOK_SPACE_ID}/stories/0/0`;
+    const DAMEN_WEBSITE_BASE_URL = 'https://www.damen.com';
+    const STORYBLOK_TOKEN_KEY = 'storyblokMapiToken';
 
-    // State Variables
-    let storyblokMapiToken = localStorage.getItem(TOKEN_STORAGE_KEY) || '';
-    let allStoriesFullSlugs = [];
-    let currentTableStories = []; // Stores stories currently displayed in the main table
+    // Global state
+    let storyblokMapiToken = localStorage.getItem(STORYBLOK_TOKEN_KEY) || '';
+    let allStories = []; // Stores { name, id, slug, full_slug }
+    let currentStoryData = null; // Stores the full JSON data of the currently selected story
+    let currentStoryImages = []; // Stores extracted image data for the current story and sub-story
     let isEditMode = false;
-    let changedStories = new Set(); // Stores storyIds of stories that have been modified (main or related)
-    
-    // New state to track which main story "owns" which related stories, and all images data
-    // This will help in knowing which story to update when an image field is changed.
-    let imageModifications = new Map(); // Map<storyId (main or related), Map<imageBynderId, {originalFileName, originalAlt, newFileName, newAlt}>>
-    let storyToRelatedMap = new Map(); // Map<mainStoryId, Set<relatedStoryId>> // To track parent-child relationships for PUT requests
-    let allLoadedStoriesContent = new Map(); // Map<storyId, story.content> of all stories (main and related) that have their images loaded
+    let modifiedImages = new Map(); // Map<imageId, {altText: string, fileName: string, originalBynderImageRef: object, originalParentField: string, originalStoryId: number}>
 
-    // --- Helper Functions ---
+
+    toggleEditBtn.disabled = false;
+    isEditMode = false; // Reset edit mode
+    toggleEditBtn.textContent = 'Toggle Edit Mode';
+
+
+    // --- Utility Functions ---
 
     /**
-     * Shows a loading indicator.
-     * @param {HTMLElement} element
+     * Shows a custom modal dialog with a title and message.
+     * @param {string} title
+     * @param {string} message
      */
-    function showLoading(element, text = 'Loading...') {
-        element.textContent = text;
-        element.classList.remove('hidden');
+    function showModal(title, message, autoclose) {
+        modalTitle.textContent = title;
+        modalMessage.textContent = message;
+        modalOverlay.classList.remove('hidden');
+		
+		// Добавляем эту строку, чтобы скрыть модальное окно через 1 секунду
+		if (autoclose) {
+			setTimeout(() => {
+				modalOverlay.classList.add('hidden');
+			}, 1000);
+		}
     }
 
     /**
-     * Hides a loading indicator.
-     * @param {HTMLElement} element
+     * Hides the custom modal dialog.
      */
-    function hideLoading(element) {
-        element.classList.add('hidden');
+    function hideModal() {
+        modalOverlay.classList.add('hidden');
     }
 
     /**
-     * Fetches data from Storyblok API.
-     * @param {string} endpoint - The API endpoint relative to BASE_API_URL.
-     * @param {Object} params - Query parameters.
-     * @returns {Promise<Object|null>} JSON response or null on error.
+     * Toggles the visibility of a loading indicator.
+     * @param {HTMLElement} indicatorElement
+     * @param {boolean} show
      */
-    async function fetchStoryblokApi(endpoint, params = {}) {
+    function toggleLoadingIndicator(indicatorElement, show) {
+        if (show) {
+            indicatorElement.classList.remove('hidden');
+        } else {
+            indicatorElement.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Makes an authenticated API request to Storyblok.
+     * @param {string} url - The API endpoint URL.
+     * @param {string} method - HTTP method (GET, POST, PUT, etc.).
+     * @param {object} [body=null] - Request body for POST/PUT requests.
+     * @returns {Promise<object>} - JSON response from the API.
+     * @throws {Error} - If the token is missing or API request fails.
+     */
+    async function makeApiRequest(url, method = 'GET', body = null) {
         if (!storyblokMapiToken) {
-            // No alert here, as it's handled by connectButton click
-            console.error('MAPI Token is missing.');
-            return null;
+            throw new Error('Storyblok MAPI token is not set. Please go to Settings.');
         }
 
-        const queryString = new URLSearchParams(params).toString();
-        const url = `${BASE_API_URL}${endpoint}${queryString ? `?${queryString}` : ''}`;
+        const options = {
+            method: method,
+            headers: {
+                'Authorization': storyblokMapiToken,
+                'Content-Type': 'application/json'
+            }
+        };
+
+        if (body) {
+            options.body = JSON.stringify(body);
+        }
 
         try {
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Authorization': storyblokMapiToken,
-                    'Content-Type': 'application/json'
-                }
-            });
-
+            const response = await fetch(url, options);
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+                const errorData = await response.json();
+                throw new Error(`API Error: ${response.status} - ${errorData.error || response.statusText}`);
             }
-
             return await response.json();
         } catch (error) {
-            console.error('Error fetching from Storyblok API:', error);
-            alert(`Error connecting to Storyblok: ${error.message}`);
-            return null;
+            console.error('API Request failed:', error);
+            throw new Error(`Failed to fetch data from Storyblok: ${error.message}`);
         }
     }
 
     /**
-     * Sends a PUT request to Storyblok API.
-     * @param {string} endpoint - The API endpoint relative to BASE_API_URL.
-     * @param {Object} data - The payload to send.
-     * @returns {Promise<Object|null>} JSON response or null on error.
+     * Recursively finds image objects within a Storyblok content object.
+     * @param {object} content - The Storyblok content object.
+     * @param {string} parentField - The name of the field containing the images (e.g., 'images3D', 'og_image').
+     * @returns {Array<object>} An array of objects, each containing an image object and its parent field name.
      */
-    async function putStoryblokApi(endpoint, data) {
-        if (!storyblokMapiToken) {
-            console.error('MAPI Token is missing.');
-            return null;
-        }
-
-        const url = `${BASE_API_URL}${endpoint}`;
-
-        try {
-            const response = await fetch(url, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': storyblokMapiToken,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    story: data,
-                    publish: 1 // Publish changes immediately
-                })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`PUT request failed: ${response.status} ${response.statusText} - ${errorText}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error('Error sending PUT request to Storyblok API:', error);
-            alert(`Error updating Storyblok: ${error.message}`);
-            return null;
-        }
-    }
-
-    /**
-     * Recursively extracts image objects from a story JSON.
-     * @param {Object} obj - The current object to search.
-     * @returns {Array} An array of found image objects.
-     */
-    function extractImages(obj) {
+    function findImagesInContent(content, parentField = 'root') {
         let images = [];
-        if (typeof obj !== 'object' || obj === null) {
-            return images;
-        }
 
-        // Check if the current object itself is an image structure
-        // Also ensure it has a databaseId, which is crucial for tracking
-        if (obj.component === 'bynder_image' && obj.image && obj.image.length > 0 && obj.image[0].databaseId) {
-            images.push(obj);
-        }
-
-        // Recursively search in arrays
-        if (Array.isArray(obj)) {
-            for (const item of obj) {
-                images = images.concat(extractImages(item));
-            }
-        } else { // Recursively search in objects
-            for (const key in obj) {
-                if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                    images = images.concat(extractImages(obj[key]));
+        if (Array.isArray(content)) {
+            content.forEach(item => {
+                images = images.concat(findImagesInContent(item, parentField));
+            });
+        } else if (typeof content === 'object' && content !== null) {
+            for (const key in content) {
+                if (content.hasOwnProperty(key)) {
+                    // Check if the current key directly holds an image array
+                    if (Array.isArray(content[key]) && content[key].length > 0 && content[key][0].component === 'bynder_image') {
+                        content[key].forEach(imageWrapper => {
+                            if (imageWrapper.image && Array.isArray(imageWrapper.image) && imageWrapper.image.length > 0 && imageWrapper.image[0].databaseId) {
+                                images.push({
+                                    bynderImage: imageWrapper.image[0],
+                                    alt: imageWrapper.alt,
+                                    parentField: key, // The field name directly containing the bynder_image component
+                                    _uid: imageWrapper._uid // Store _uid to help identify the exact object later
+                                });
+                            }
+                        });
+                    } else if (typeof content[key] === 'object' && content[key] !== null) {
+                        // Recursively search in nested objects/arrays
+                        images = images.concat(findImagesInContent(content[key], key));
+                    }
                 }
             }
         }
@@ -166,699 +160,562 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Finds and returns a specific image object within the story JSON by its Bynder ID.
-     * This is crucial for updating the correct image data for PUT requests.
-     * @param {Object} storyContent - The `story.content` object of a story.
-     * @param {string} imageBynderId - The Bynder ID of the image to find.
-     * @returns {Object|null} The found image object or null.
+     * Extracts all relevant image data from a Storyblok story JSON.
+     * This function now returns both the extracted images and a reference to the modified JSON
+     * so it can be updated later.
+     * @param {object} storyJson - The full Storyblok story JSON.
+     * @param {number} storyId - The ID of the story this JSON belongs to (for PUT requests).
+     * @returns {Array<object>} An array of structured image objects.
      */
-    function findImageInStoryContentById(storyContent, imageBynderId) {
-        const findRecursive = (obj) => {
-            if (typeof obj !== 'object' || obj === null) return null;
+    function extractImagesFromStoryJson(storyJson, storyId) {
+        const extractedImages = [];
+        const content = storyJson.story.content;
 
-            if (obj.component === 'bynder_image' && obj.image && obj.image.length > 0) {
-                const bynderImage = obj.image[0];
-                if (bynderImage.databaseId === imageBynderId) {
-                    return obj; // Return the 'bynder_image' component object
-                }
+        // Use a helper function to recursively find and collect image data
+        function collectImagesRecursive(obj, currentPath = '') {
+            if (typeof obj !== 'object' || obj === null) {
+                return;
             }
 
             if (Array.isArray(obj)) {
-                for (const item of obj) {
-                    const found = findRecursive(item);
-                    if (found) return found;
-                }
+                obj.forEach((item, index) => {
+                    collectImagesRecursive(item, `${currentPath}[${index}]`);
+                });
             } else {
                 for (const key in obj) {
-                    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                        const found = findRecursive(obj[key]);
-                        if (found) return found;
+                    if (obj.hasOwnProperty(key)) {
+                        const newPath = currentPath ? `${currentPath}.${key}` : key;
+
+                        // Check for bynder_image component
+                        if (Array.isArray(obj[key]) && obj[key].length > 0 && obj[key][0] && obj[key][0].component === 'bynder_image') {
+                            obj[key].forEach(imageWrapper => {
+                                if (imageWrapper.image && Array.isArray(imageWrapper.image) && imageWrapper.image.length > 0 && imageWrapper.image[0].databaseId) {
+                                    extractedImages.push({
+                                        storyId: storyId,
+                                        parentField: key,
+                                        alt: imageWrapper.alt || '',
+                                        fileName: imageWrapper.image[0].name || '',
+                                        bynderId: imageWrapper.image[0].databaseId,
+                                        thumbnailUrl: imageWrapper.image[0].files.thumbnail.url,
+                                        transformUrl: imageWrapper.image[0].files.transformBaseUrl.url,
+                                        _uid: imageWrapper._uid, // Unique ID for this specific imageWrapper object
+                                        bynderImageRef: imageWrapper.image[0], // Reference to the actual bynder image object
+                                        altTextRef: imageWrapper // Reference to the parent object containing 'alt'
+                                    });
+                                }
+                            });
+                        }
+                        // Recurse for other nested objects/arrays
+                        collectImagesRecursive(obj[key], newPath);
                     }
                 }
             }
-            return null;
-        };
+        }
 
-        return findRecursive(storyContent);
+        collectImagesRecursive(content);
+        return extractedImages;
+    }
+
+    /**
+     * Renders the image table body with current image data.
+     * @param {Array<object>} images - Array of structured image objects.
+     */
+    function renderImageTable(images) {
+        imageTableBody.innerHTML = ''; // Clear existing rows
+        if (images.length === 0) {
+            imageTableBody.innerHTML = '<tr><td colspan="5" class="table-placeholder">No images found for this story.</td></tr>';
+            sendToServerBtn.disabled = true;
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        images.forEach(image => {
+            const row = document.createElement('tr');
+
+            // Image Thumbnail column
+            const imgTd = document.createElement('td');
+            const imgLink = document.createElement('a');
+            imgLink.href = image.transformUrl;
+            imgLink.target = '_blank';
+            const imgThumbnail = document.createElement('img');
+            imgThumbnail.src = image.thumbnailUrl;
+            imgThumbnail.alt = image.alt; // Use alt for the thumbnail itself
+            imgThumbnail.className = 'img-thumbnail';
+            imgLink.appendChild(imgThumbnail);
+            imgTd.appendChild(imgLink);
+            row.appendChild(imgTd);
+
+            // Bynder Link column
+            const bynderLinkTd = document.createElement('td');
+            const bynderLink = document.createElement('a');
+            bynderLink.href = `https://medialibrary.damen.com/media/?mediaId=${image.bynderId}`;
+            bynderLink.target = '_blank';
+            bynderLink.textContent = 'link';
+            bynderLinkTd.appendChild(bynderLink);
+            row.appendChild(bynderLinkTd);
+
+            // Parent Field column
+            const parentFieldTd = document.createElement('td');
+            parentFieldTd.textContent = image.parentField;
+            row.appendChild(parentFieldTd);
+
+            // File Name column
+            const fileNameTd = document.createElement('td');
+            const fileNameInput = document.createElement('textarea');
+            fileNameInput.className = `editable-cell ${isEditMode ? 'editable' : ''}`;
+            fileNameInput.readOnly = !isEditMode;
+            fileNameInput.value = image.fileName;
+            fileNameInput.dataset.storyId = image.storyId;
+            fileNameInput.dataset.uid = image._uid;
+            fileNameInput.dataset.field = 'fileName';
+            fileNameTd.appendChild(fileNameInput);
+            row.appendChild(fileNameTd);
+
+            // ALT Text column
+            const altTextTd = document.createElement('td');
+            const altTextInput = document.createElement('textarea');
+            altTextInput.className = `editable-cell ${isEditMode ? 'editable' : ''}`;
+            altTextInput.readOnly = !isEditMode;
+            altTextInput.value = image.alt;
+            altTextInput.dataset.storyId = image.storyId;
+            altTextInput.dataset.uid = image._uid;
+            altTextInput.dataset.field = 'altText';
+            altTextTd.appendChild(altTextInput);
+            row.appendChild(altTextTd);
+
+            fragment.appendChild(row);
+        });
+        imageTableBody.appendChild(fragment);
+
+        // Re-attach event listeners for editable cells if in edit mode
+        if (isEditMode) {
+            document.querySelectorAll('.editable-cell').forEach(cell => {
+                cell.addEventListener('change', handleCellChange);
+            });
+        }
+        sendToServerBtn.disabled = modifiedImages.size === 0;
+    }
+
+    /**
+     * Handles changes in editable table cells (ALT text or File Name).
+     * Updates the `modifiedImages` map.
+     * @param {Event} event - The change event from an input/textarea.
+     */
+    function handleCellChange(event) {
+        const input = event.target;
+        const storyId = parseInt(input.dataset.storyId);
+        const uid = input.dataset.uid;
+        const field = input.dataset.field;
+        const newValue = input.value;
+
+        // Find the original image object in currentStoryImages
+        const originalImage = currentStoryImages.find(img => img.storyId === storyId && img._uid === uid);
+
+        if (!originalImage) {
+            console.error('Original image not found for modification tracking:', { storyId, uid, field });
+            return;
+        }
+
+        const uniqueKey = `${storyId}-${uid}`; // Key for the modifiedImages map
+
+        if (!modifiedImages.has(uniqueKey)) {
+            // If not tracked yet, add a new entry
+            modifiedImages.set(uniqueKey, {
+                storyId: storyId,
+                _uid: uid,
+                altText: originalImage.alt,
+                fileName: originalImage.fileName,
+                bynderImageRef: originalImage.bynderImageRef, // Reference to the bynder image object within the story JSON
+                altTextRef: originalImage.altTextRef, // Reference to the alt text object within the story JSON
+                originalParentField: originalImage.parentField,
+                originalAlt: originalImage.alt,
+                originalFileName: originalImage.fileName
+            });
+        }
+
+        const modificationEntry = modifiedImages.get(uniqueKey);
+
+        // Update the specific field
+        if (field === 'altText') {
+            modificationEntry.altText = newValue;
+        } else if (field === 'fileName') {
+            modificationEntry.fileName = newValue;
+        }
+
+        // Check if the modified value is different from the original
+        const isAltChanged = modificationEntry.altText !== modificationEntry.originalAlt;
+        const isFileNameChanged = modificationEntry.fileName !== modificationEntry.originalFileName;
+
+        if (!isAltChanged && !isFileNameChanged) {
+            // If both fields reverted to original, remove from modifiedImages
+            modifiedImages.delete(uniqueKey);
+        }
+
+        sendToServerBtn.disabled = modifiedImages.size === 0;
+    }
+
+    // --- Core Logic ---
+
+    /**
+     * Loads the Storyblok MAPI token from localStorage and updates the input.
+     */
+    function loadSettings() {
+        storyblokMapiToken = localStorage.getItem(STORYBLOK_TOKEN_KEY) || '';
+        storyblokTokenInput.value = storyblokMapiToken;
+        // Hide token by default
+        storyblokTokenInput.type = 'password';
+        toggleTokenVisibilityBtn.innerHTML = '<span class="icon-eye-closed"></span>';
+        settingsPanel.classList.remove('active'); // Ensure panel is hidden on load
+    }
+
+    /**
+     * Fetches all stories from Storyblok and populates the sidebar.
+     */
+    async function fetchAllStories() {
+        toggleLoadingIndicator(loadingIndicatorSidebar, true);
+        storyList.innerHTML = '';
+        allStories = [];
+        let page = 1;
+        let hasMore = true;
+
+        try {
+            while (hasMore) {
+                const url = `${BASE_MAPI_URL}/stories/?per_page=100&page=${page}&is_published=true&story_only=1&filter_query[component][not_in]=redirect&starts_with=damen/en&excluding_slugs=damen/en/general/*`;
+                const response = await makeApiRequest(url);
+                if (response.stories && response.stories.length > 0) {
+                    allStories = allStories.concat(response.stories.map(s => ({
+                        name: s.name,
+                        id: s.id,
+                        slug: s.slug,
+                        full_slug: s.full_slug
+                    })));
+                    page++;
+                } else {
+                    hasMore = false;
+                }
+            }
+            allStories.sort((a, b) => a.full_slug.localeCompare(b.full_slug));
+            renderStoryList();
+            if (allStories.length === 0) {
+                storyList.innerHTML = '<p class="placeholder-text">No stories found.</p>';
+            }
+			else
+			{
+				showModal('Success', `Successfully connected and loaded ${allStories.length} stories.`);
+			}
+        } catch (error) {
+            showModal('Error', `Failed to fetch stories: ${error.message}`);
+            storyList.innerHTML = '<p class="placeholder-text">Error loading stories. Check console for details.</p>';
+        } finally {
+            toggleLoadingIndicator(loadingIndicatorSidebar, false);
+        }
+    }
+
+    /**
+     * Renders the list of stories in the sidebar.
+     */
+    function renderStoryList() {
+        storyList.innerHTML = ''; // Clear existing list
+        const fragment = document.createDocumentFragment();
+
+        allStories.forEach(story => {
+            const storyItem = document.createElement('div');
+            storyItem.className = 'story-item';
+            storyItem.dataset.storyId = story.id; // Store story ID for selection
+
+            const topRow = document.createElement('div');
+            topRow.className = 'top-row';
+
+            // Story Name Link
+            const storyNameLink = document.createElement('a');
+            storyNameLink.href = '#'; // Prevent default navigation
+            storyNameLink.className = 'story-name-link';
+            storyNameLink.textContent = story.name;
+            storyNameLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                loadStoryDetails(story.id);
+            });
+            topRow.appendChild(storyNameLink);
+
+            // Settings Icon Link
+            const settingsIconLink = document.createElement('a');
+            settingsIconLink.href = `${STORYBLOK_APP_URL}/${story.id}`;
+            settingsIconLink.target = '_blank';
+            settingsIconLink.className = 'settings-icon-link';
+            settingsIconLink.innerHTML = '⚙️'; // Gear icon
+            topRow.appendChild(settingsIconLink);
+
+            storyItem.appendChild(topRow);
+
+            // Weblink
+            const weblink = document.createElement('a');
+            let fullWeblink = story.full_slug.replace('damen/en', DAMEN_WEBSITE_BASE_URL);
+            if (fullWeblink.endsWith('/')) {
+                fullWeblink = fullWeblink.slice(0, -1);
+            }
+            weblink.href = fullWeblink;
+            weblink.target = '_blank';
+            weblink.className = 'weblink';
+            weblink.textContent = fullWeblink;
+            storyItem.appendChild(weblink);
+
+            fragment.appendChild(storyItem);
+        });
+        storyList.appendChild(fragment);
+    }
+
+    /**
+     * Loads the details of a specific story and populates the main table.
+     * @param {number} storyId - The ID of the story to load.
+     */
+    async function loadStoryDetails(storyId) {
+        toggleLoadingIndicator(loadingIndicatorMain, true);
+        currentStoryTitle.textContent = 'Loading Story...';
+        imageTableBody.innerHTML = '<tr><td colspan="5" class="table-placeholder">Loading images...</td></tr>';
+        currentStoryImages = [];
+        currentStoryData = null; // Clear previous story data
+        modifiedImages.clear(); // Clear modifications for new story
+        sendToServerBtn.disabled = true;
+        //toggleEditBtn.disabled = false;
+        //isEditMode = false; // Reset edit mode
+        //toggleEditBtn.textContent = 'Toggle Edit Mode';
+
+        try {
+            // Fetch main story
+            const mainStoryResponse = await makeApiRequest(`${BASE_MAPI_URL}/stories/${storyId}`);
+            const mainStoryJson = mainStoryResponse;
+            currentStoryData = mainStoryJson; // Store the original full story JSON
+
+            currentStoryTitle.textContent = mainStoryJson.story.name;
+
+            // Extract images from main story
+            const mainStoryExtractedImages = extractImagesFromStoryJson(mainStoryJson, storyId);
+            currentStoryImages = currentStoryImages.concat(mainStoryExtractedImages);
+
+            // Check for linked stories and fetch them
+            const content = mainStoryJson.story.content;
+            let linkedStoryUuid = null;
+            let linkedStoryFieldName = null; // To keep track of where the UUID came from
+
+            const componentMap = {
+                'product_detail_page': 'product',
+                'used_product_detail_page': 'product',
+                'charter_product_detail_page': 'product',
+                'event_detail_page': 'event',
+                'project_detail_page': 'project',
+            };
+
+            if (content.component && componentMap[content.component] && content[componentMap[content.component]]) {
+                linkedStoryUuid = content[componentMap[content.component]];
+                linkedStoryFieldName = componentMap[content.component];
+            }
+
+            if (linkedStoryUuid) {
+                const linkedStoryResponse = await makeApiRequest(`${BASE_MAPI_URL}/stories/?by_uuids=${linkedStoryUuid}`);
+                if (linkedStoryResponse.stories && linkedStoryResponse.stories.length > 0) {
+                    const subStoryId = linkedStoryResponse.stories[0].id;
+                    const subStoryDetailsResponse = await makeApiRequest(`${BASE_MAPI_URL}/stories/${subStoryId}`);
+                    // Store sub-story JSON separately or merge if needed. For now, we only need its images.
+                    // IMPORTANT: We need to keep a reference to the full sub-story JSON to send PUT requests for it.
+                    // For simplicity, let's just assume we reload the substory JSON when sending changes.
+                    // A more robust solution would be to store {storyId: fullJson} for all loaded stories.
+                    // Given the constraint that sub-stories don't have further sub-stories, we'll refetch when needed.
+
+                    const subStoryExtractedImages = extractImagesFromStoryJson(subStoryDetailsResponse, subStoryId);
+                    currentStoryImages = currentStoryImages.concat(subStoryExtractedImages);
+                }
+            }
+            renderImageTable(currentStoryImages);
+
+        } catch (error) {
+            showModal('Error', `Failed to load story details: ${error.message}`);
+            currentStoryTitle.textContent = 'Select a Story to View Images';
+            imageTableBody.innerHTML = '<tr><td colspan="5" class="table-placeholder">Error loading images.</td></tr>';
+            //toggleEditBtn.disabled = true;
+        } finally {
+            toggleLoadingIndicator(loadingIndicatorMain, false);
+        }
+    }
+
+    /**
+     * Toggles the edit mode for the image table.
+     */
+    function toggleEditMode() {
+        isEditMode = !isEditMode;
+        toggleEditBtn.textContent = isEditMode ? 'Edit Mode ON' : 'Edit Mode OFF';
+		toggleEditBtn.style.backgroundColor = isEditMode ? 'green' : '#6c757d';
+        document.querySelectorAll('.editable-cell').forEach(cell => {
+            cell.readOnly = !isEditMode;
+            cell.classList.toggle('editable', isEditMode);
+            // Re-attach or remove event listeners based on edit mode
+            if (isEditMode) {
+                cell.addEventListener('change', handleCellChange);
+            } else {
+                cell.removeEventListener('change', handleCellChange);
+            }
+        });
+        // If exiting edit mode, clear modifications if no changes were sent
+        if (!isEditMode && modifiedImages.size > 0) {
+            // Optionally, ask user if they want to discard changes
+            // For now, let's keep them if not sent
+        }
+    }
+
+    /**
+     * Sends modified image data to the Storyblok API via PUT requests.
+     */
+    async function sendModificationsToServer() {
+        if (modifiedImages.size === 0) {
+            showModal('Info', 'No changes to send.');
+            return;
+        }
+
+        toggleLoadingIndicator(loadingIndicatorMain, true);
+        sendToServerBtn.disabled = true; // Disable to prevent double-clicks
+        let hasErrors = false;
+        const storiesToUpdate = new Map(); // Map<storyId, fullStoryJson>
+
+        try {
+            // Group modifications by storyId
+            for (const [key, mod] of modifiedImages.entries()) {
+                if (!storiesToUpdate.has(mod.storyId)) {
+                    // Fetch the full story JSON for the story being updated
+                    // This ensures we send the latest state, not a potentially stale one
+                    const storyResponse = await makeApiRequest(`${BASE_MAPI_URL}/stories/${mod.storyId}`);
+                    storiesToUpdate.set(mod.storyId, storyResponse.story);
+                }
+            }
+
+            for (const [key, mod] of modifiedImages.entries()) {
+                const storyToUpdate = storiesToUpdate.get(mod.storyId);
+                if (!storyToUpdate) {
+                    throw new Error(`Story data not found for ID: ${mod.storyId}`);
+                }
+
+                // Recursively find and update the specific bynder_image component
+                function updateImageRecursive(obj) {
+                    if (typeof obj !== 'object' || obj === null) {
+                        return;
+                    }
+
+                    if (Array.isArray(obj)) {
+                        obj.forEach(item => updateImageRecursive(item));
+                    } else {
+                        for (const prop in obj) {
+                            if (obj.hasOwnProperty(prop)) {
+                                if (Array.isArray(obj[prop]) && obj[prop].length > 0 && obj[prop][0] && obj[prop][0].component === 'bynder_image') {
+                                    obj[prop].forEach(imageWrapper => {
+                                        if (imageWrapper._uid === mod._uid) { // Found the exact imageWrapper
+                                            let fileNameChanged = false;
+                                            if (mod.fileName !== mod.originalFileName) {
+                                                imageWrapper.image[0].name = mod.fileName;
+                                                fileNameChanged = true;
+                                            }
+                                            if (mod.altText !== mod.originalAlt) {
+                                                imageWrapper.alt = mod.altText;
+                                            }
+
+                                            // Update transformBaseUrl.url if fileName has changed
+                                            if (fileNameChanged) {
+                                                const bynderImage = imageWrapper.image[0];
+                                                const oldTransformUrl = bynderImage.files.transformBaseUrl.url;
+                                                const lastSlashIndex = oldTransformUrl.lastIndexOf('/');
+                                                if (lastSlashIndex !== -1) {
+                                                    const baseUrl = oldTransformUrl.substring(0, lastSlashIndex + 1);
+                                                    bynderImage.files.transformBaseUrl.url = baseUrl + mod.fileName;
+                                                }
+                                            }
+                                        }
+                                    });
+                                } else {
+                                    updateImageRecursive(obj[prop]);
+                                }
+                            }
+                        }
+                    }
+                }
+                updateImageRecursive(storyToUpdate.content);
+            }
+
+            // Send PUT requests for each story that had modifications
+            for (const [storyId, updatedStoryJson] of storiesToUpdate.entries()) {
+                const putUrl = `${BASE_MAPI_URL}/stories/${storyId}`;
+                await makeApiRequest(putUrl, 'PUT', {
+                    story: updatedStoryJson,
+                    publish: 1
+                });
+                console.log(`Successfully updated story ID: ${storyId}`);
+            }
+
+            showModal('Success', 'Changes sent to server successfully! Reloading data...', true);
+            modifiedImages.clear(); // Clear modifications after successful send
+            // Reload the current story to reflect changes and update `currentStoryImages`
+            await loadStoryDetails(currentStoryData.story.id);
+
+        } catch (error) {
+            hasErrors = true;
+            showModal('Error', `Failed to send changes to server: ${error.message}`);
+        } finally {
+            toggleLoadingIndicator(loadingIndicatorMain, false);
+            sendToServerBtn.disabled = modifiedImages.size === 0;
+        }
     }
 
 
-    // --- Settings Panel Logic ---
+    // --- Event Listeners ---
 
-    settingsButton.addEventListener('click', () => {
-        settingsPanel.classList.remove('hidden');
-        settingsPanel.classList.add('visible');
-        storyblokTokenInput.value = storyblokMapiToken;
-        // Set input type to password by default
-        storyblokTokenInput.type = 'password';
-        toggleTokenVisibilityButton.textContent = '👁️';
+    // Settings Panel controls
+    settingsBtn.addEventListener('click', () => {
+		settingsPanel.classList.toggle('active');
+		// For smooth transition, only hide/show display property when not active
+		if (settingsPanel.classList.contains('active')) {
+			settingsPanel.classList.remove('hidden');
+		} else {
+			setTimeout(() => settingsPanel.classList.add('hidden'), 300); // Match transition duration
+		}
     });
 
-    closeSettingsButton.addEventListener('click', () => {
-        settingsPanel.classList.remove('visible');
-        settingsPanel.classList.add('hidden');
+    closeSettingsBtn.addEventListener('click', () => {
+		settingsPanel.classList.toggle('active');
+		// For smooth transition, only hide/show display property when not active
+		if (settingsPanel.classList.contains('active')) {
+			settingsPanel.classList.remove('hidden');
+		} else {
+			setTimeout(() => settingsPanel.classList.add('hidden'), 300); // Match transition duration
+		}
     });
 
-    toggleTokenVisibilityButton.addEventListener('click', () => {
+    saveSettingsBtn.addEventListener('click', () => {
+        storyblokMapiToken = storyblokTokenInput.value.trim();
+        localStorage.setItem(STORYBLOK_TOKEN_KEY, storyblokMapiToken);
+        showModal('Settings Saved', 'Storyblok MAPI token has been saved.');
+        settingsPanel.classList.remove('active');
+    });
+
+    toggleTokenVisibilityBtn.addEventListener('click', () => {
         if (storyblokTokenInput.type === 'password') {
             storyblokTokenInput.type = 'text';
-            toggleTokenVisibilityButton.textContent = '🙈';
+            toggleTokenVisibilityBtn.innerHTML = '<span class="icon-eye-open"></span>';
         } else {
             storyblokTokenInput.type = 'password';
-            toggleTokenVisibilityButton.textContent = '👁️';
+            toggleTokenVisibilityBtn.innerHTML = '<span class="icon-eye-closed"></span>';
         }
     });
 
-    saveTokenButton.addEventListener('click', () => {
-        storyblokMapiToken = storyblokTokenInput.value.trim();
-        localStorage.setItem(TOKEN_STORAGE_KEY, storyblokMapiToken);
-        alert('Storyblok MAPI Token saved!');
-        settingsPanel.classList.remove('visible');
-        settingsPanel.classList.add('hidden');
-    });
+    // Connect to Storyblok button
+    connectBtn.addEventListener('click', fetchAllStories);
 
-    // --- Connect to Storyblok Logic ---
+    // Toggle Edit Mode button
+    toggleEditBtn.addEventListener('click', toggleEditMode);
 
-    connectButton.addEventListener('click', async () => {
-        if (!storyblokMapiToken) {
-            alert('Please save your Storyblok MAPI Token in settings first.');
-            return;
-        }
+    // Send to Server button
+    sendToServerBtn.addEventListener('click', sendModificationsToServer);
 
-        showLoading(loadingIndicator, 'Connecting...');
-        allStoriesFullSlugs = [];
-        let page = 1;
-        let hasMore = true;
+    // Modal Close button
+    modalCloseBtn.addEventListener('click', hideModal);
 
-        storyTree.innerHTML = '<p class="placeholder-text">Loading stories...</p>'; // Clear and show loading for tree
-        connectButton.disabled = true; // Disable connect button during loading
-
-        try {
-            while (hasMore) {
-                const params = {
-                    per_page: 100,
-                    page: page,
-                    is_published: true,
-                    story_only: 1,
-                    'filter_query[component][not_in]': 'redirect',
-                    starts_with: 'damen/en'
-                };
-                const response = await fetchStoryblokApi('stories', params);
-
-                if (response && response.stories.length > 0) {
-                    allStoriesFullSlugs = allStoriesFullSlugs.concat(response.stories.map(s => s.full_slug));
-                    page++;
-                } else {
-                    hasMore = false;
-                }
-            }
-
-            allStoriesFullSlugs.sort(); // Sort full_slugs alphabetically
-            buildStoryTree(allStoriesFullSlugs);
-            alert('Successfully connected to Storyblok and loaded stories!');
-            connectButton.classList.add('hidden'); // Hide after successful connection
-        } finally {
-            hideLoading(loadingIndicator);
-            connectButton.disabled = false; // Re-enable in case of error (though button is hidden if success)
-        }
-    });
-
-    // --- Story Tree Navigation Logic ---
-
-    function buildStoryTree(slugs) {
-        storyTree.innerHTML = ''; // Clear previous tree
-        const root = {};
-
-        slugs.forEach(slug => {
-            const parts = slug.split('/').filter(p => p !== '');
-            let currentLevel = root;
-            parts.forEach((part, index) => {
-                if (!currentLevel[part]) {
-                    currentLevel[part] = {
-                        _fullSlug: parts.slice(0, index + 1).join('/'),
-                        _children: {},
-                        _isLeaf: true
-                    };
-                    if (index < parts.length - 1) {
-                        currentLevel[part]._isLeaf = false;
-                    }
-                }
-                currentLevel = currentLevel[part]._children;
-            });
-        });
-        
-        const renderTree = (node, parentUl) => {
-            const sortedKeys = Object.keys(node).sort((a, b) => {
-                // Sort folders (non-leaves) before files (leaves)
-                const isAFolder = !node[a]._isLeaf && Object.keys(node[a]._children).length > 0;
-                const isBFolder = !node[b]._isLeaf && Object.keys(node[b]._children).length > 0;
-
-                if (isAFolder && !isBFolder) return -1;
-                if (!isAFolder && isBFolder) return 1;
-                return a.localeCompare(b);
-            });
-
-            sortedKeys.forEach(key => {
-                const item = node[key];
-                const li = document.createElement('li');
-                const div = document.createElement('div');
-                div.classList.add('tree-node');
-                div.dataset.fullSlug = item._fullSlug; // Store full slug
-
-                const hasChildren = Object.keys(item._children).length > 0;
-                const toggleIcon = document.createElement('span');
-                toggleIcon.classList.add('tree-toggle-icon');
-                toggleIcon.textContent = hasChildren ? '+' : ''; // Show + only if has children
-                div.appendChild(toggleIcon);
-
-                const itemName = document.createElement('span');
-                itemName.classList.add('tree-item-name');
-                itemName.textContent = key.endsWith('/') ? key : key.split('/').pop(); // Display only the last part or key with /
-                if (item._fullSlug === 'damen/en') { // Handle the root 'damen/en' special case
-                    itemName.textContent = 'Damen (EN)';
-                }
-                div.appendChild(itemName);
-                li.appendChild(div);
-
-                if (hasChildren) {
-                    const ul = document.createElement('ul');
-                    ul.classList.add('collapsed'); // Initially collapsed
-                    li.appendChild(ul);
-                    renderTree(item._children, ul);
-                }
-                parentUl.appendChild(li);
-            });
-        };
-
-        const ul = document.createElement('ul');
-        ul.classList.add('story-tree-root');
-        renderTree(root, ul);
-        storyTree.appendChild(ul);
-
-        // Add event listeners for tree nodes
-        storyTree.addEventListener('click', (event) => {
-            const targetNode = event.target.closest('.tree-node');
-            if (targetNode) {
-                // Remove 'selected' class from previously selected node
-                const currentSelected = storyTree.querySelector('.tree-node.selected');
-                if (currentSelected) {
-                    currentSelected.classList.remove('selected');
-                }
-                targetNode.classList.add('selected');
-
-                const fullSlug = targetNode.dataset.fullSlug;
-                if (fullSlug) {
-                    loadMainTable(fullSlug);
-                }
-
-                // Toggle children visibility (only for nodes with children)
-                const toggleIcon = targetNode.querySelector('.tree-toggle-icon');
-                const childrenUl = targetNode.nextElementSibling;
-                if (toggleIcon && childrenUl && childrenUl.tagName === 'UL') {
-                    if (childrenUl.classList.contains('collapsed')) {
-                        childrenUl.classList.remove('collapsed');
-                        toggleIcon.textContent = '-';
-                    } else {
-                        childrenUl.classList.add('collapsed');
-                        toggleIcon.textContent = '+';
-                    }
-                }
-            }
-        });
-    }
-
-    // --- Main Table Logic ---
-
-    async function loadMainTable(fullSlug) {
-        showLoading(tableLoadingIndicator, 'Loading table...');
-        mainStoryTableBody.innerHTML = ''; // Clear existing table rows
-        currentTableStories = []; // Reset current table stories
-        changedStories.clear(); // Reset changed stories
-        imageModifications.clear(); // Clear image modifications
-        storyToRelatedMap.clear(); // Clear related stories map
-        allLoadedStoriesContent.clear(); // Clear cached story content
-        toggleEditModeButton.classList.add('hidden');
-        sendToServerButton.classList.add('hidden');
-        toggleAllDetailsButton.classList.add('hidden');
-        isEditMode = false; // Reset edit mode state
-        toggleEditModeButton.textContent = 'Enable Editing'; // Reset button text
-
-        let page = 1;
-        let hasMore = true;
-        let storiesForTable = [];
-
-        try {
-            while (hasMore) {
-                const params = {
-                    per_page: 100,
-                    page: page,
-                    is_published: true,
-                    story_only: 1,
-                    'filter_query[component][not_in]': 'redirect',
-                    starts_with: fullSlug // Use the full slug for filtering
-                };
-                const response = await fetchStoryblokApi('stories', params);
-
-                if (response && response.stories.length > 0) {
-                    storiesForTable = storiesForTable.concat(response.stories);
-                    page++;
-                } else {
-                    hasMore = false;
-                }
-            }
-
-            // Sort by the 'hidden' weblink column (which is derived from full_slug)
-            storiesForTable.sort((a, b) => a.full_slug.localeCompare(b.full_slug));
-            currentTableStories = storiesForTable; // Store for later use
-
-            if (storiesForTable.length === 0) {
-                mainStoryTableBody.innerHTML = '<tr><td colspan="4" class="placeholder-text">No stories found for this path.</td></tr>';
-                return;
-            }
-
-            storiesForTable.forEach(story => {
-                // Ensure BASE_DAMEN_URL doesn't end with / if story.full_slug starts with one after replacement
-                const weblinkSlug = story.full_slug.replace('damen/en', '');
-                const weblink = `${BASE_DAMEN_URL}${weblinkSlug.startsWith('/') ? weblinkSlug : '/' + weblinkSlug}`.replace(/\/$/, '');
-                const storyblokLink = `${BASE_STORYBLOK_APP_URL}${story.id}`;
-
-                const row = mainStoryTableBody.insertRow(); // Insert at the end by default
-                row.dataset.storyId = story.id;
-                row.dataset.fullSlug = story.full_slug;
-
-                row.innerHTML = `
-                    <td class="hidden">${weblink}</td>
-                    <td><a href="${weblink}" target="_blank">${story.name}</a></td>
-                    <td><a href="${storyblokLink}" target="_blank">link</a></td>
-                    <td class="action-cell">
-                        <button class="button secondary-button get-images-button" data-story-id="${story.id}">Get Images</button>
-                    </td>
-                `;
-            });
-
-            toggleEditModeButton.classList.remove('hidden');
-            toggleAllDetailsButton.classList.remove('hidden');
-
-        } finally {
-            hideLoading(tableLoadingIndicator);
-        }
-    }
-
-    // --- Image Details Logic ---
-
-    mainStoryTableBody.addEventListener('click', async (event) => {
-        const getImagesButton = event.target.closest('.get-images-button');
-        if (getImagesButton) {
-            const storyId = getImagesButton.dataset.storyId;
-            await loadImagesForStory(storyId, getImagesButton);
-        }
-    });
-
-    async function loadImagesForStory(mainStoryId, buttonElement) {
-        const parentRow = buttonElement.closest('tr');
-        // Check for existing detail row. If present, just toggle its visibility.
-        const existingDetailRow = document.querySelector(`tr.detail-row[data-parent-story-id="${mainStoryId}"]`);
-
-        if (existingDetailRow) {
-            existingDetailRow.classList.toggle('hidden');
-            return;
-        }
-
-        buttonElement.disabled = true;
-        buttonElement.textContent = 'Loading...';
-
-        try {
-            const storyDetailsResponse = await fetchStoryblokApi(`stories/${mainStoryId}`);
-            if (!storyDetailsResponse || !storyDetailsResponse.story) {
-                alert('Could not fetch story details.');
-                return;
-            }
-
-            const mainStory = storyDetailsResponse.story;
-            allLoadedStoriesContent.set(mainStory.id, mainStory.content); // Cache main story content
-
-            let allImages = extractImages(mainStory.content);
-            let relatedStoryIds = new Set(); // Store actual Storyblok IDs of related stories
-
-            // Check for related stories if component matches
-            const component = mainStory.content.component;
-            let relatedStoryUuids = []; // Store UUIDs, not IDs
-
-            if (['product_detail_page', 'used_product_detail_page', 'charter_product_detail_page'].includes(component) && mainStory.content.product) {
-                relatedStoryUuids.push(mainStory.content.product);
-            } else if (component === 'event_detail_page' && mainStory.content.event) {
-                relatedStoryUuids.push(mainStory.content.event);
-            } else if (component === 'project_detail_page' && mainStory.content.project) {
-                relatedStoryUuids.push(mainStory.content.project);
-            }
-            // Add other component checks here if needed, e.g., 'news_article' with 'author'
-            // if (component === 'news_article' && story.content.author) {
-            //     relatedStoryUuids.push(story.content.author);
-            // }
-
-            if (relatedStoryUuids.length > 0) {
-                const uuidsString = relatedStoryUuids.join(',');
-                const relatedStoriesResponse = await fetchStoryblokApi(`stories/?by_uuids=${uuidsString}`);
-                if (relatedStoriesResponse && relatedStoriesResponse.stories && relatedStoriesResponse.stories.length > 0) {
-                    for (const relatedStory of relatedStoriesResponse.stories) {
-                        const relatedStoryDetailsResponse = await fetchStoryblokApi(`stories/${relatedStory.id}`);
-                        if (relatedStoryDetailsResponse && relatedStoryDetailsResponse.story) {
-                            allLoadedStoriesContent.set(relatedStory.id, relatedStoryDetailsResponse.story.content); // Cache related story content
-                            allImages = allImages.concat(extractImages(relatedStoryDetailsResponse.story.content));
-                            relatedStoryIds.add(relatedStory.id);
-                        }
-                    }
-                }
-            }
-
-            // Store the map of main story to its related stories
-            if (relatedStoryIds.size > 0) {
-                storyToRelatedMap.set(mainStoryId, relatedStoryIds);
-            }
-            
-            // Create the detail row
-            const detailRow = mainStoryTableBody.insertRow(parentRow.sectionRowIndex + 1);
-            detailRow.classList.add('detail-row');
-            detailRow.dataset.parentStoryId = mainStoryId; // Link detail row to its parent story
-            const detailCell = detailRow.insertCell(0);
-            detailCell.colSpan = 4;
-
-            if (allImages.length === 0) {
-                detailCell.innerHTML = '<p class="placeholder-text" style="text-align: left; padding-left: 15px;">No images found for this story.</p>';
-                return;
-            }
-
-            const imagesTable = document.createElement('table');
-            imagesTable.classList.add('image-details-table');
-            imagesTable.innerHTML = `
-                <thead>
-                    <tr>
-                        <th style="width: 100px;">Image</th>
-                        <th>Bynder Link</th>
-                        <th>File Name</th>
-                        <th>ALT Text</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            `;
-            const imagesTableBody = imagesTable.querySelector('tbody');
-
-            allImages.forEach(imgObj => {
-                const bynderImg = imgObj.image[0]; // Assuming bynder_image component structure
-                const thumbnailUrl = bynderImg.files.thumbnail.url;
-                const transformUrl = bynderImg.files.transformBaseUrl.url;
-                const bynderLink = BASE_BYNDER_URL + bynderImg.databaseId;
-                const fileName = bynderImg.name;
-                const altText = imgObj.alt;
-
-                // Determine which story this specific image belongs to (main or related)
-                // This requires iterating through allLoadedStoriesContent to find where this image resides.
-                let actualStoryIdForImage = mainStoryId; // Default to main story
-                for (const [sId, sContent] of allLoadedStoriesContent.entries()) {
-                    if (findImageInStoryContentById(sContent, bynderImg.databaseId)) {
-                        actualStoryIdForImage = sId;
-                        break;
-                    }
-                }
-
-                const imgRow = imagesTableBody.insertRow(); // This is the image-specific row in the detail table
-                imgRow.dataset.originalAlt = altText; // Store original for change tracking
-                imgRow.dataset.originalFileName = fileName;
-                imgRow.dataset.originalTransformUrl = transformUrl; // Store original transform URL
-                imgRow.dataset.parentStoryId = mainStoryId; // Parent story of the UI row
-                imgRow.dataset.actualStoryId = actualStoryIdForImage; // The actual story ID this image belongs to in Storyblok
-                imgRow.dataset.imageBynderId = bynderImg.databaseId; // Unique ID for image if needed
-
-                imgRow.innerHTML = `
-                    <td>
-                        <div class="image-thumbnail-wrapper">
-                            <a href="${transformUrl}" target="_blank">
-                                <img src="${thumbnailUrl}" alt="${altText}" class="image-thumbnail">
-                            </a>
-                        </div>
-                    </td>
-                    <td><a href="${bynderLink}" target="_blank">link</a></td>
-                    <td>
-                        <input type="text" class="editable-field file-name-input" value="${fileName}" readonly data-original-value="${fileName}">
-                    </td>
-                    <td>
-                        <input type="text" class="editable-field alt-text-input" value="${altText}" readonly data-original-value="${altText}">
-                    </td>
-                `;
-
-                // Add event listeners for input changes
-                const fileNameInput = imgRow.querySelector('.file-name-input');
-                const altTextInput = imgRow.querySelector('.alt-text-input');
-
-                const handleInputChange = (event) => {
-                    const currentInput = event.target;
-                    const imageDetailRow = currentInput.closest('tr'); // Get the specific image row
-                    const actualStoryId = imageDetailRow.dataset.actualStoryId; // The story this image is truly part of
-                    const imageBynderId = imageDetailRow.dataset.imageBynderId;
-
-                    const originalFileName = imageDetailRow.dataset.originalFileName;
-                    const originalAlt = imageDetailRow.dataset.originalAlt;
-                    const originalTransformUrl = imageDetailRow.dataset.originalTransformUrl; // Get original transform URL
-
-                    const newFileName = fileNameInput.value;
-                    const newAlt = altTextInput.value;
-
-                    // Initialize modification map for this story if not present
-                    if (!imageModifications.has(actualStoryId)) {
-                        imageModifications.set(actualStoryId, new Map());
-                    }
-                    const storyMods = imageModifications.get(actualStoryId);
-
-                    // Track if this specific image field has changed
-                    const isFileNameChanged = newFileName !== originalFileName;
-                    const isAltTextChanged = newAlt !== originalAlt;
-
-                    if (isFileNameChanged || isAltTextChanged) {
-                        storyMods.set(imageBynderId, {
-                            originalFileName, originalAlt, originalTransformUrl, newFileName, newAlt
-                        });
-                        imageDetailRow.classList.add('modified-image-row'); // Mark image detail row as modified
-                        changedStories.add(actualStoryId); // Mark the actual story as changed
-                        sendToServerButton.classList.remove('hidden'); // Show send button
-                    } else {
-                        // If current input went back to original, remove from specific image modifications
-                        storyMods.delete(imageBynderId);
-                        imageDetailRow.classList.remove('modified-image-row');
-
-                        // Check if the actual story still has any modifications
-                        if (storyMods.size === 0) {
-                            imageModifications.delete(actualStoryId); // Remove story from map if no images modified
-                            changedStories.delete(actualStoryId); // Remove actual story from changed set
-                        }
-
-                        if (changedStories.size === 0) {
-                            sendToServerButton.classList.add('hidden'); // Hide if no changes left
-                        }
-                    }
-                };
-
-                fileNameInput.addEventListener('change', handleInputChange);
-                altTextInput.addEventListener('change', handleInputChange);
-            });
-
-            detailCell.appendChild(imagesTable);
-            // After inserting, apply edit mode if already active
-            setEditMode(isEditMode);
-
-        } finally {
-            buttonElement.disabled = false;
-            buttonElement.textContent = 'Get Images';
-        }
-    }
-
-    // --- Global Image Details Controls ---
-
-    toggleAllDetailsButton.addEventListener('click', async () => {
-        const allGetImageButtons = document.querySelectorAll('.get-images-button:not([disabled])');
-        const allDetailRows = document.querySelectorAll('.detail-row');
-
-        const areAllCollapsed = Array.from(allDetailRows).every(row => row.classList.contains('hidden'));
-
-        if (areAllCollapsed) {
-            // Expand all
-            toggleAllDetailsButton.textContent = 'Collapse All Images';
-            for (const button of allGetImageButtons) {
-                const storyId = button.dataset.storyId;
-                const existingDetailRow = document.querySelector(`tr.detail-row[data-parent-story-id="${storyId}"]`);
-                if (existingDetailRow) {
-                    existingDetailRow.classList.remove('hidden');
-                } else {
-                    await loadImagesForStory(storyId, button); // Await each load to prevent too many parallel requests
-                }
-            }
-        } else {
-            // Collapse all
-            allDetailRows.forEach(row => row.classList.add('hidden'));
-            toggleAllDetailsButton.textContent = 'Expand All Images';
-        }
-    });
-
-    toggleEditModeButton.addEventListener('click', () => {
-        isEditMode = !isEditMode;
-        setEditMode(isEditMode);
-        toggleEditModeButton.textContent = isEditMode ? 'Disable Editing' : 'Enable Editing';
-    });
-
-    function setEditMode(enable) {
-        document.querySelectorAll('.editable-field').forEach(input => {
-            if (enable) {
-                input.removeAttribute('readonly');
-            } else {
-                input.setAttribute('readonly', 'readonly');
-            }
-        });
-        // Show/hide send button based on actual changes, and only if edit mode is enabled
-        if (changedStories.size > 0 && enable) {
-            sendToServerButton.classList.remove('hidden');
-        } else {
-            sendToServerButton.classList.add('hidden');
-        }
-    }
-
-    // --- Send Changes to Server Logic ---
-
-    sendToServerButton.addEventListener('click', async () => {
-        if (changedStories.size === 0) {
-            alert('No changes to send to the server.');
-            return;
-        }
-
-        if (!confirm(`Are you sure you want to send changes for ${changedStories.size} stories to Storyblok? This will publish them.`)) {
-            return;
-        }
-
-        showLoading(loadingIndicator, 'Sending changes...');
-        let successCount = 0;
-        let failCount = 0;
-        let storiesToProcess = Array.from(changedStories); // Create a copy to iterate over
-
-        for (const storyIdToUpdate of storiesToProcess) {
-            const modsForThisStory = imageModifications.get(storyIdToUpdate);
-            if (!modsForThisStory || modsForThisStory.size === 0) {
-                // Should not happen if `changedStories` is kept in sync, but as a safeguard.
-                console.warn(`No modifications found for storyId: ${storyIdToUpdate}, even though it's in changedStories. Skipping.`);
-                changedStories.delete(storyIdToUpdate);
-                continue;
-            }
-
-            // 1. Fetch the latest story data before applying changes
-            const latestStoryResponse = await fetchStoryblokApi(`stories/${storyIdToUpdate}`);
-            if (!latestStoryResponse || !latestStoryResponse.story) {
-                console.warn(`Could not fetch latest story data for storyId: ${storyIdToUpdate}. Skipping PUT for this story.`);
-                failCount++;
-                changedStories.delete(storyIdToUpdate); // Remove from set if we can't get fresh data
-                continue;
-            }
-            let storyToUpdate = latestStoryResponse.story;
-            let modifiedStoryContent = storyToUpdate.content; // Directly modify the content of the fresh story
-
-            let actualChangesApplied = false;
-            for (const [imageBynderId, mod] of modsForThisStory.entries()) {
-                const imageObj = findImageInStoryContentById(modifiedStoryContent, imageBynderId);
-
-                if (imageObj) {
-                    // Apply changes to the image object in our modified content
-                    const bynderImage = imageObj.image[0];
-
-                    let fileNameChanged = false;
-                    if (bynderImage.name !== mod.newFileName) {
-                        bynderImage.name = mod.newFileName;
-                        fileNameChanged = true;
-                    }
-                    if (imageObj.alt !== mod.newAlt) {
-                        imageObj.alt = mod.newAlt;
-                    }
-
-                    // Update transformBaseUrl.url if fileName has changed
-                    if (fileNameChanged) {
-                        const oldTransformUrl = bynderImage.files.transformBaseUrl.url;
-                        const lastSlashIndex = oldTransformUrl.lastIndexOf('/');
-                        if (lastSlashIndex !== -1) {
-                            const baseUrl = oldTransformUrl.substring(0, lastSlashIndex + 1);
-                            bynderImage.files.transformBaseUrl.url = baseUrl + mod.newFileName;
-                        } else {
-                            // If no slash, just replace the whole URL (unlikely for Bynder transform URLs)
-                            bynderImage.files.transformBaseUrl.url = mod.newFileName;
-                        }
-                    }
-                    actualChangesApplied = true;
-                } else {
-                    console.warn(`Could not find image with Bynder ID: "${imageBynderId}" in story ${storyIdToUpdate} for update. Skipping this image.`);
-                }
-            }
-
-            if (!actualChangesApplied) {
-                console.log(`No actual changes were applied for story ${storyIdToUpdate} after re-evaluation. Skipping PUT.`);
-                changedStories.delete(storyIdToUpdate); // Remove from changed set if no actual changes were applied
-                imageModifications.delete(storyIdToUpdate); // Clear modifications for this story
-                continue; // Skip PUT if no changes were actually applied
-            }
-
-            // The 'storyToUpdate' object already has its 'content' modified
-            const result = await putStoryblokApi(`stories/${storyIdToUpdate}`, storyToUpdate);
-
-            if (result) {
-                successCount++;
-                // After successful save, update the original values in the UI and remove modified classes
-                // Find all image rows belonging to this actual storyId (main or related)
-                document.querySelectorAll(`tr[data-actual-story-id="${storyIdToUpdate}"]`).forEach(row => {
-                    const imageBynderId = row.dataset.imageBynderId;
-                    const mods = modsForThisStory.get(imageBynderId);
-
-                    if (mods) { // If this image was modified and successfully sent
-                        const altInput = row.querySelector('.alt-text-input');
-                        const fileNameInput = row.querySelector('.file-name-input');
-                        
-                        row.dataset.originalAlt = altInput.value;
-                        altInput.dataset.originalValue = altInput.value; // Update data-original-value
-                        
-                        row.dataset.originalFileName = fileNameInput.value;
-                        fileNameInput.dataset.originalValue = fileNameInput.value; // Update data-original-value
-
-                        // Update the stored original transform URL in the UI row dataset
-                        const oldTransformUrl = row.dataset.originalTransformUrl;
-                        const lastSlashIndex = oldTransformUrl.lastIndexOf('/');
-                        if (lastSlashIndex !== -1) {
-                            row.dataset.originalTransformUrl = oldTransformUrl.substring(0, lastSlashIndex + 1) + fileNameInput.value;
-                        } else {
-                            row.dataset.originalTransformUrl = fileNameInput.value;
-                        }
-
-                        row.classList.remove('modified-image-row'); // Remove modification visual
-                    }
-                });
-                
-                changedStories.delete(storyIdToUpdate); // Remove from changed set
-                imageModifications.delete(storyIdToUpdate); // Clear modifications for this story
-            } else {
-                failCount++;
-                // If update failed, the story remains in `changedStories` and `imageModifications`
-                // for the user to potentially retry. No UI updates for this story.
-            }
-        }
-
-        hideLoading(loadingIndicator);
-        alert(`Changes sent: ${successCount} successful, ${failCount} failed.`);
-        // Hide send button if no more stories are marked as changed
-        if (changedStories.size === 0) {
-            sendToServerButton.classList.add('hidden');
-        }
-    });
-
-    // --- Initial setup ---
-    // Check for token on load and potentially hide connect button if already connected
-    if (storyblokMapiToken) {
-        console.log('Storyblok MAPI Token found. Ready to connect.');
-        // Optionally, could immediately trigger connect here or just keep the button visible
-        // For now, let's keep it visible so the user can manually connect or refresh data.
-        // If you want it to auto-connect on load, uncomment the line below:
-        // connectButton.click(); 
-    } else {
-        console.log('No Storyblok MAPI Token found. Please enter it in settings.');
-    }
+    // Initial setup
+    loadSettings();
 });
+
+// --- END OF FILE script.js ---
