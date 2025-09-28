@@ -383,12 +383,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 const url = `${BASE_MAPI_URL}/stories/?per_page=100&page=${page}&is_published=true&story_only=1&filter_query[component][not_in]=redirect&starts_with=damen/en&excluding_slugs=damen/en/general/*`;
                 const response = await makeApiRequest(url);
                 if (response.stories && response.stories.length > 0) {
-                    allStories = allStories.concat(response.stories.map(s => ({
+                    /*allStories = allStories.concat(response.stories.map(s => ({
                         name: s.name,
                         id: s.id,
                         slug: s.slug,
                         full_slug: s.full_slug
                     })));
+                    page++;
+					*/
+					allStories = allStories.concat(response.stories.map(s => {
+						let processedFullSlug = s.full_slug;
+                        if (s.full_slug === 'damen/en/home') {
+                            processedFullSlug = s.full_slug.replace('damen/en/home', 'damen/en/');
+                        }
+                        return {
+                            name: s.name,
+                            id: s.id,
+                            slug: s.slug,
+                            full_slug: processedFullSlug // Используем обработанный full_slug
+                        };
+                    }));
                     page++;
                 } else {
                     hasMore = false;
@@ -414,6 +428,56 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Renders the list of stories in the sidebar.
      */
+    /* OLD renderStoryList() function renderStoryList() {
+        storyList.innerHTML = ''; // Clear existing list
+        const fragment = document.createDocumentFragment();
+
+        allStories.forEach(story => {
+            const storyItem = document.createElement('div');
+            storyItem.className = 'story-item';
+            storyItem.dataset.storyId = story.id; // Store story ID for selection
+
+            const topRow = document.createElement('div');
+            topRow.className = 'top-row';
+
+            // Story Name Link
+            const storyNameLink = document.createElement('a');
+            storyNameLink.href = '#'; // Prevent default navigation
+            storyNameLink.className = 'story-name-link';
+            storyNameLink.textContent = story.name;
+            storyNameLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                loadStoryDetails(story.id);
+            });
+            topRow.appendChild(storyNameLink);
+
+            // Settings Icon Link
+            const settingsIconLink = document.createElement('a');
+            settingsIconLink.href = `${STORYBLOK_APP_URL}/${story.id}`;
+            settingsIconLink.target = '_blank';
+            settingsIconLink.className = 'settings-icon-link';
+            settingsIconLink.innerHTML = '⚙️'; // Gear icon
+            topRow.appendChild(settingsIconLink);
+
+            storyItem.appendChild(topRow);
+
+            // Weblink
+            const weblink = document.createElement('a');
+            let fullWeblink = story.full_slug.replace('damen/en', DAMEN_WEBSITE_BASE_URL);
+            if (fullWeblink.endsWith('/')) {
+                fullWeblink = fullWeblink.slice(0, -1);
+            }
+            weblink.href = fullWeblink;
+            weblink.target = '_blank';
+            weblink.className = 'weblink';
+            weblink.textContent = fullWeblink;
+            storyItem.appendChild(weblink);
+
+            fragment.appendChild(storyItem);
+        });
+        storyList.appendChild(fragment);
+    }*/
+	
     function renderStoryList() {
         storyList.innerHTML = ''; // Clear existing list
         const fragment = document.createDocumentFragment();
@@ -422,6 +486,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const storyItem = document.createElement('div');
             storyItem.className = 'story-item';
             storyItem.dataset.storyId = story.id; // Store story ID for selection
+
+            // Calculate indentation based on full_slug
+            const slugParts = story.full_slug.split('/');
+            // Count non-empty parts after the initial 'damen/en'
+            // For 'damen/en/product/example', parts are ['', 'damen', 'en', 'product', 'example']
+            // We want 0 indent for 'damen/en', 1 for 'damen/en/product', etc.
+            const indentationLevel = Math.max(0, slugParts.filter(part => part !== '').length - 2);
+            storyItem.style.paddingLeft = `${indentationLevel * 15}px`; // 15px per level of indentation
 
             const topRow = document.createElement('div');
             topRow.className = 'top-row';
@@ -607,6 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     obj[prop].forEach(imageWrapper => {
                                         if (imageWrapper._uid === mod._uid) { // Found the exact imageWrapper
                                             let fileNameChanged = false;
+											mod.fileName = mod.fileName.replace(/\s+/g, '-').toLowerCase();//2025-09-28 new
                                             if (mod.fileName !== mod.originalFileName) {
                                                 imageWrapper.image[0].name = mod.fileName;
                                                 fileNameChanged = true;
