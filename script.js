@@ -679,7 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     obj[prop].forEach(imageWrapper => {
                                         if (imageWrapper._uid === mod._uid) { // Found the exact imageWrapper
                                             let fileNameChanged = false;
-											mod.fileName = mod.fileName.replace(/[^a-zA-Z0-9\s-]/g, '').toLowerCase();//2025-09-28 new replace(/\s+/g, '-')
+											mod.fileName = mod.fileName.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();//2025-09-28 new replace(/\s+/g, '-')
                                             if (mod.fileName !== mod.originalFileName) {
                                                 imageWrapper.image[0].name = mod.fileName;
                                                 fileNameChanged = true;
