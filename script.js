@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentStoryData = null; // Stores the full JSON data of the currently selected story
     let currentStoryImages = []; // Stores extracted image data for the current story and sub-story
     let isEditMode = false;
-    let modifiedImages = new Map(); // Map<imageId, {altText: string, fileName: string, originalBynderImageRef: object, originalParentField: string, originalStoryId: number}>
+    let modifiedImages = new Map(); // Map<imageId, {altText: string, title: string, originalBynderImageRef: object, originalParentField: string, originalStoryId: number}>
 
 
     toggleEditBtn.disabled = false;
@@ -144,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 images.push({
                                     bynderImage: imageWrapper.image[0],
                                     alt: imageWrapper.alt,
+									title: imageWrapper.title,
                                     parentField: key, // The field name directly containing the bynder_image component
                                     _uid: imageWrapper._uid // Store _uid to help identify the exact object later
                                 });
@@ -194,13 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                         storyId: storyId,
                                         parentField: key,
                                         alt: imageWrapper.alt || '',
-                                        fileName: imageWrapper.image[0].name || '',
+										title: imageWrapper.title || '',
                                         bynderId: imageWrapper.image[0].databaseId,
                                         thumbnailUrl: imageWrapper.image[0].files.thumbnail.url,
                                         transformUrl: imageWrapper.image[0].files.transformBaseUrl.url,
                                         _uid: imageWrapper._uid, // Unique ID for this specific imageWrapper object
                                         bynderImageRef: imageWrapper.image[0], // Reference to the actual bynder image object
-                                        altTextRef: imageWrapper // Reference to the parent object containing 'alt'
+                                        altTextRef: imageWrapper, // Reference to the parent object containing 'alt'
+                                        titleRef: imageWrapper // Reference to the parent object containing 'title'
                                     });
                                 }
                             });
@@ -240,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const imgThumbnail = document.createElement('img');
             imgThumbnail.src = image.thumbnailUrl;
             imgThumbnail.alt = image.alt; // Use alt for the thumbnail itself
+            imgThumbnail.title = image.title; // Use title for the thumbnail itself
             imgThumbnail.className = 'img-thumbnail';
             imgLink.appendChild(imgThumbnail);
             imgTd.appendChild(imgLink);
@@ -260,16 +263,16 @@ document.addEventListener('DOMContentLoaded', () => {
             row.appendChild(parentFieldTd);
 
             // File Name column
-            const fileNameTd = document.createElement('td');
-            const fileNameInput = document.createElement('textarea');
-            fileNameInput.className = `editable-cell ${isEditMode ? 'editable' : ''}`;
-            fileNameInput.readOnly = !isEditMode;
-            fileNameInput.value = image.fileName;
-            fileNameInput.dataset.storyId = image.storyId;
-            fileNameInput.dataset.uid = image._uid;
-            fileNameInput.dataset.field = 'fileName';
-            fileNameTd.appendChild(fileNameInput);
-            row.appendChild(fileNameTd);
+            const titleTd = document.createElement('td');
+            const titleInput = document.createElement('textarea');
+            titleInput.className = `editable-cell ${isEditMode ? 'editable' : ''}`;
+            titleInput.readOnly = !isEditMode;
+            titleInput.value = image.title;
+            titleInput.dataset.storyId = image.storyId;
+            titleInput.dataset.uid = image._uid;
+            titleInput.dataset.field = 'title';
+            titleTd.appendChild(titleInput);
+            row.appendChild(titleTd);
 
             // ALT Text column
             const altTextTd = document.createElement('td');
@@ -324,12 +327,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 storyId: storyId,
                 _uid: uid,
                 altText: originalImage.alt,
-                fileName: originalImage.fileName,
+                title: originalImage.title,
                 bynderImageRef: originalImage.bynderImageRef, // Reference to the bynder image object within the story JSON
                 altTextRef: originalImage.altTextRef, // Reference to the alt text object within the story JSON
+                titleRef: originalImage.titleRef, // Reference to the title object within the story JSON
                 originalParentField: originalImage.parentField,
                 originalAlt: originalImage.alt,
-                originalFileName: originalImage.fileName
+                originalTitle: originalImage.title
             });
         }
 
@@ -338,15 +342,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update the specific field
         if (field === 'altText') {
             modificationEntry.altText = newValue;
-        } else if (field === 'fileName') {
-            modificationEntry.fileName = newValue;
+        } else if (field === 'title') {
+            modificationEntry.title = newValue;
         }
 
         // Check if the modified value is different from the original
         const isAltChanged = modificationEntry.altText !== modificationEntry.originalAlt;
-        const isFileNameChanged = modificationEntry.fileName !== modificationEntry.originalFileName;
+        const isTitleChanged = modificationEntry.title !== modificationEntry.originalTitle;
 
-        if (!isAltChanged && !isFileNameChanged) {
+        if (!isAltChanged && !isTitleChanged) {
             // If both fields reverted to original, remove from modifiedImages
             modifiedImages.delete(uniqueKey);
         }
@@ -678,26 +682,29 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (Array.isArray(obj[prop]) && obj[prop].length > 0 && obj[prop][0] && obj[prop][0].component === 'bynder_image') {
                                     obj[prop].forEach(imageWrapper => {
                                         if (imageWrapper._uid === mod._uid) { // Found the exact imageWrapper
-                                            let fileNameChanged = false;
-											mod.fileName = mod.fileName.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();//2025-09-28 new replace(/\s+/g, '-')
-                                            if (mod.fileName !== mod.originalFileName) {
-                                                imageWrapper.image[0].name = mod.fileName;
-                                                fileNameChanged = true;
+                                            //let titleChanged = false;
+											mod.title = mod.title.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();//2025-09-28 new replace(/\s+/g, '-')
+                                            if (mod.title !== mod.originalTitle) {
+                                                imageWrapper.title = mod.title;
+                                                //titleChanged = true;
                                             }
                                             if (mod.altText !== mod.originalAlt) {
                                                 imageWrapper.alt = mod.altText;
                                             }
 
-                                            // Update transformBaseUrl.url if fileName has changed
-                                            if (fileNameChanged) {
+												
+											/*
+                                            // Update transformBaseUrl.url if title has changed
+                                            if (titleChanged) {
                                                 const bynderImage = imageWrapper.image[0];
                                                 const oldTransformUrl = bynderImage.files.transformBaseUrl.url;
                                                 const lastSlashIndex = oldTransformUrl.lastIndexOf('/');
                                                 if (lastSlashIndex !== -1) {
                                                     const baseUrl = oldTransformUrl.substring(0, lastSlashIndex + 1);
-                                                    bynderImage.files.transformBaseUrl.url = baseUrl + mod.fileName;
+                                                    bynderImage.files.transformBaseUrl.url = baseUrl + mod.title;
                                                 }
                                             }
+											*/
                                         }
                                     });
                                 } else {
