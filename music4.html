@@ -274,7 +274,7 @@
         const startSec = parseInt(row[2 + type]) || 0;
         
         const durations = [2, 6, 15];
-        const timers = [25, 25, 35];
+        const timers = [25, 30, 35];
 
         ytPlayer.loadVideoById({ videoId: videoId, startSeconds: startSec });
         setTimeout(() => ytPlayer.pauseVideo(), durations[type] * 1000);
