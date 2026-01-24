@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Corporate Music Quiz</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --gold: #D4AF37;
+            --silver: #C0C0C0;
+            --bronze: #CD7F32;
+            --dark: #1a1a1a;
+            --accent: #2d5a27;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f4f4;
+            color: var(--dark);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Header & Controls */
+        header {
+            padding: 20px 40px;
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .btn-upload {
+            border: 2px solid #ddd;
+            color: #555;
+            background-color: white;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Main Layout */
+        main {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            padding: 30px;
+            flex-grow: 1;
+        }
+
+        .quiz-section {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .players-section {
+            background: #ebebeb;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--dark);
+        }
+
+        /* Buttons Style */
+        .play-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .btn-play {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: transform 0.1s;
+        }
+
+        .btn-play:active { transform: scale(0.95); }
+        .gold { background-color: var(--gold); color: white; }
+        .silver { background-color: var(--silver); color: #333; }
+        .bronze { background-color: var(--bronze); color: white; }
+
+        /* Timer & Info */
+        #timer {
+            font-size: 48px;
+            font-weight: 300;
+            margin: 20px 0;
+            color: var(--accent);
+        }
+
+        #answer-box {
+            margin-top: 20px;
+            font-size: 24px;
+            min-height: 40px;
+            font-weight: 600;
+            color: #444;
+        }
+
+        .nav-controls {
+            margin-top: 40px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-nav {
+            padding: 10px 20px;
+            border: 1px solid #ccc;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        /* Players List */
+        .player-row {
+            display: flex;
+            align-items: center;
+            background: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            gap: 8px;
+        }
+
+        .player-name { border: none; font-weight: 600; width: 100px; }
+        .player-score { width: 50px; text-align: center; font-weight: bold; border: 1px solid #eee; }
+
+        .score-btn {
+            padding: 5px;
+            font-size: 11px;
+            cursor: pointer;
+            border: none;
+            border-radius: 3px;
+        }
+
+        .note {
+            font-size: 12px;
+            color: #888;
+            margin-top: 20px;
+            font-style: italic;
+        }
+
+        /* YouTube Container (Hidden) */
+        #yt-player-container {
+            position: absolute;
+            top: -1000px;
+            left: -1000px;
+            width: 1px;
+            height: 1px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="font-weight: 600; letter-spacing: 1px;">CORPORATE MUSIC QUIZ</div>
+    <div class="upload-btn-wrapper">
+        <button class="btn-upload">Загрузить таблицу (.xlsx)</button>
+        <input type="file" id="excel-file" accept=".xlsx, .xls" style="position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; width: 100%;">
+    </div>
+</header>
+
+<main>
+    <section class="quiz-section">
+        <div id="track-counter">Трек: 0 / 0</div>
+        
+        <div id="timer">00</div>
+
+        <div class="play-buttons">
+            <button class="btn-play gold" onclick="playMusic(0)">Play 2 sec</button>
+            <button class="btn-play silver" onclick="playMusic(1)">Play 6 sec</button>
+            <button class="btn-play bronze" onclick="playMusic(2)">Play 15 sec</button>
+        </div>
+
+        <div id="answer-box">***</div>
+
+        <div class="nav-controls">
+            <button class="btn-nav" onclick="prevTrack()">Prev</button>
+            <button class="btn-nav" style="background: var(--dark); color: white;" onclick="showAnswer()">Показать ответ</button>
+            <button class="btn-nav" onclick="nextTrack()">Next</button>
+        </div>
+
+        <p class="note">* За угаданного исполнителя + название песни очки удваиваются (кнопка x2)</p>
+    </section>
+
+    <section class="players-section">
+        <h3 style="margin-top:0">Участники</h3>
+        <div id="players-list"></div>
+        <button onclick="addPlayer()" style="width:100%; padding: 10px; margin-top: 10px; cursor: pointer;">+ Добавить участника</button>
+    </section>
+</main>
+
+<div id="yt-player-container">
+    <div id="player"></div>
+</div>
+
+<script>
+    let songs = [];
+    let currentIndex = 0;
+    let player;
+    let timerInterval;
+    let stopTimeout;
+
+    // Инициализация YouTube API
+    function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+            height: '1',
+            width: '1',
+            videoId: '',
+            events: { 'onReady': () => console.log("Player Ready") }
+        });
+    }
+    
+    // Загрузка скрипта YouTube
+    const tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    const firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+    // Звуковой сигнал по окончании таймера
+    const beep = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+
+    // Чтение Excel
+    document.getElementById('excel-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+            
+            songs = rows.map(row => ({
+                url: getYoutubeID(row[0]),
+                answer: row[1],
+                t2: row[2],
+                t6: row[3],
+                t15: row[4]
+            })).filter(s => s.url);
+
+            currentIndex = 0;
+            updateUI();
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function getYoutubeID(url) {
+        if (!url) return null;
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    function updateUI() {
+        document.getElementById('track-counter').innerText = `Трек: ${songs.length > 0 ? currentIndex + 1 : 0} / ${songs.length}`;
+        document.getElementById('answer-box').innerText = "***";
+        resetTimerDisplay();
+    }
+
+    function playMusic(type) {
+        if (songs.length === 0) return;
+        
+        const song = songs[currentIndex];
+        let startTime, duration, timerDuration;
+
+        if (type === 0) { startTime = song.t2; duration = 2; timerDuration = 25; }
+        else if (type === 1) { startTime = song.t6; duration = 6; timerDuration = 25; }
+        else { startTime = song.t15; duration = 15; timerDuration = 35; }
+
+        // Воспроизведение
+        player.loadVideoById({
+            videoId: song.url,
+            startSeconds: parseInt(startTime)
+        });
+
+        clearTimeout(stopTimeout);
+        stopTimeout = setTimeout(() => {
+            player.pauseVideo();
+        }, duration * 1000);
+
+        startTimer(timerDuration);
+    }
+
+    function startTimer(seconds) {
+        clearInterval(timerInterval);
+        let timeLeft = seconds;
+        const display = document.getElementById('timer');
+        display.innerText = timeLeft;
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            display.innerText = timeLeft < 10 ? '0' + timeLeft : timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                beep.play();
+            }
+        }, 1000);
+    }
+
+    function resetTimerDisplay() {
+        clearInterval(timerInterval);
+        document.getElementById('timer').innerText = "00";
+    }
+
+    function showAnswer() {
+        if (songs[currentIndex]) {
+            document.getElementById('answer-box').innerText = songs[currentIndex].answer;
+        }
+    }
+
+    function nextTrack() {
+        if (currentIndex < songs.length - 1) {
+            currentIndex++;
+            updateUI();
+            player.stopVideo();
+        }
+    }
+
+    function prevTrack() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            updateUI();
+            player.stopVideo();
+        }
+    }
+
+    // Логика игроков
+    function addPlayer() {
+        const container = document.getElementById('players-list');
+        const div = document.createElement('div');
+        div.className = 'player-row';
+        div.innerHTML = `
+            <input type="text" class="player-name" placeholder="Игрок">
+            <input type="number" class="player-score" value="0">
+            <button class="score-btn gold" onclick="modScore(this, 4)">+4</button>
+            <button class="score-btn gold" onclick="modScore(this, 'x2')">x2</button>
+            <button class="score-btn silver" onclick="modScore(this, 2)">+2</button>
+            <button class="score-btn silver" onclick="modScore(this, 'x2')">x2</button>
+            <button class="score-btn bronze" onclick="modScore(this, 1)">+1</button>
+            <button class="score-btn bronze" onclick="modScore(this, 'x2')">x2</button>
+            <button class="score-btn" onclick="this.parentElement.remove()" style="background:#ff4444; color:white;">✕</button>
+        `;
+        container.appendChild(div);
+    }
+
+    function modScore(btn, val) {
+        const input = btn.parentElement.querySelector('.player-score');
+        let current = parseInt(input.value) || 0;
+        if (val === 'x2') {
+            input.value = current * 2;
+        } else {
+            input.value = current + val;
+        }
+    }
+</script>
+
+</body>
+</html>
