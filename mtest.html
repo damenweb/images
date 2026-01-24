@@ -2,237 +2,163 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Music Quiz Player</title>
+    <title>YouTube Music Quiz</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f9; padding: 20px; text-align: center; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        
-        /* Скрываем плеер визуально, но оставляем в DOM для работы API */
-        #player-container { position: absolute; top: -9999px; left: -9999px; visibility: hidden; }
-
-        .btn { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; margin: 5px; transition: 0.3s; color: white; }
-        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
-        
-        .btn-upload { background-color: #3498db; }
-        .btn-5 { background-color: #e74c3c; font-weight: bold; } /* Красный */
-        .btn-3 { background-color: #f39c12; font-weight: bold; } /* Оранжевый */
-        .btn-1 { background-color: #2ecc71; font-weight: bold; } /* Зеленый */
-        .btn-next { background-color: #34495e; width: 100%; margin-top: 20px; }
-        .btn-stop { background-color: #95a5a6; margin-top: 10px; }
-
-        #status { margin-top: 15px; color: #666; font-size: 14px; }
-        #current-track { font-size: 20px; margin: 20px 0; font-weight: bold; min-height: 30px; color: #333; }
-        
-        .controls { display: none; } /* Скрыто до загрузки файла */
-        input[type="file"] { display: none; }
-        .file-label { display: inline-block; padding: 10px 20px; background: #3498db; color: white; border-radius: 5px; cursor: pointer; }
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; display: flex; gap: 20px; }
+        .main-panel { flex: 2; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .players-panel { flex: 1; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .controls { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
+        button { padding: 10px 15px; cursor: pointer; border: none; border-radius: 5px; transition: 0.3s; }
+        .btn-play { background: #28a745; color: white; }
+        .btn-next { background: #007bff; color: white; }
+        .btn-reveal { background: #ffc107; color: black; }
+        .player-row { border-bottom: 1px solid #eee; padding: 10px 0; }
+        .score-btn { padding: 2px 8px; font-size: 12px; margin: 2px; background: #e9ecef; border: 1px solid #ccc; }
+        #song-title { font-size: 24px; font-weight: bold; color: #dc3545; margin-top: 20px; display: none; }
+        #yt-player { position: absolute; top: -1000px; left: -1000px; width: 1px; height: 1px; } /* Скрываем видео */
+        .status { color: #666; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>🎵 Music Quiz Master</h2>
+<div class="main-panel">
+    <h2>🎵 Музыкальная Викторина</h2>
+    <input type="file" id="upload" accept=".xlsx, .xls">
+    <div id="status" class="status">Загрузите файл для начала</div>
+
+    <div class="controls">
+        <button class="btn-play" onclick="playMusic(2, 3)">Play (6 очков)</button>
+        <button class="btn-play" onclick="playMusic(4, 5)">Play (4 очка)</button>
+        <button class="btn-play" onclick="playMusic(6, 7)">Play (2 очка)</button>
+    </div>
+
+    <div class="controls">
+        <button class="btn-reveal" onclick="showTitle()">Показать название</button>
+        <button class="btn-next" onclick="nextSong()">Следующая песня ⏭️</button>
+    </div>
+
+    <div id="song-title">Название песни</div>
     
-    <div id="upload-section">
-        <label for="excel-file" class="file-label">📂 Загрузить Excel файл</label>
-        <input type="file" id="excel-file" accept=".xlsx, .xls" />
-    </div>
+    <div id="yt-player"></div>
+</div>
 
-    <div id="status">Ожидание файла...</div>
-
-    <div class="controls" id="controls-area">
-        <div id="current-track">Название песни</div>
-        <div id="track-counter" style="color: #888; font-size: 12px; margin-bottom: 10px;"></div>
-
-        <div>
-            <button class="btn btn-5" onclick="playRound(5)">Play (5 очков)</button>
-            <button class="btn btn-3" onclick="playRound(3)">Play (3 очка)</button>
-            <button class="btn btn-1" onclick="playRound(1)">Play (1 очко)</button>
-        </div>
-        
-        <button class="btn btn-stop" onclick="stopAudio()">⏹ Стоп</button>
-        <button class="btn btn-next" onclick="nextTrack()">➡ Следующая песня</button>
-    </div>
-
-    <div id="player-container">
-        <div id="player"></div>
-    </div>
+<div class="players-panel">
+    <h3>Участники</h3>
+    <button onclick="addPlayer()">+ Добавить игрока</button>
+    <div id="players-list"></div>
 </div>
 
 <script>
-    let playlist = [];
+    let songs = [];
     let currentIndex = 0;
-    let player;
-    let stopTimer = null; // Переменная для хранения таймера остановки
+    let player; // Объект YouTube плеера
+    let stopTimeout;
 
-    // 1. Инициализация YouTube API
-    const tag = document.createElement('script');
-    tag.src = "https://www.youtube.com/iframe_api";
-    const firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
+    // Инициализация YouTube API
     function onYouTubeIframeAPIReady() {
-        player = new YT.Player('player', {
-            height: '200',
-            width: '200',
-            playerVars: {
-                'playsinline': 1,
-                'controls': 0, 
-                'disablekb': 1 
-            },
-            events: {
-                'onReady': onPlayerReady,
-                'onError': onPlayerError
-            }
+        player = new YT.Player('yt-player', {
+            height: '1',
+            width: '1',
+            events: { 'onReady': () => console.log("Player Ready") }
         });
     }
 
-    function onPlayerReady(event) {
-        console.log("YouTube Player готов");
-    }
-
-    function onPlayerError(event) {
-        console.error("Ошибка плеера:", event.data);
-        // Коды ошибок: 2 - неверный ID, 100 - видео не найдено, 101/150 - запрет встраивания
-        let msg = "Ошибка YouTube.";
-        if(event.data === 150 || event.data === 101) msg = "Владелец видео запретил встраивание!";
-        if(event.data === 2) msg = "Неверный ID видео.";
-        document.getElementById('status').innerText = msg;
-    }
-
-    // 2. Обработка Excel файла
-    document.getElementById('excel-file').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
+    // Загрузка Excel
+    document.getElementById('upload').addEventListener('change', function(e) {
         const reader = new FileReader();
         reader.onload = function(e) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
-            
-            // Берем первый лист
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            
-            // Преобразуем в массив массивов (header: 1 дает сырые данные по строкам)
-            const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
-
-            // Фильтруем пустые строки и формируем плейлист
-            playlist = rawData.filter(row => row[0] && row.length >= 2).map(row => ({
-                url: row[0],
-                title: row[1],
-                t5_start: row[2],
-                t5_dur: row[3],
-                t3_start: row[4],
-                t3_dur: row[5],
-                t1_start: row[6],
-                t1_dur: row[7]
-            }));
-
-            if (playlist.length > 0) {
-                document.getElementById('status').innerText = `Загружено песен: ${playlist.length}`;
-                document.getElementById('controls-area').style.display = 'block';
-                document.getElementById('upload-section').style.display = 'none';
-                loadTrackUI(0);
-            } else {
-                alert("Файл пуст или имеет неверный формат!");
-            }
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            songs = XLSX.utils.sheet_to_json(sheet, {header: 1});
+            // Фильтруем пустые строки, если есть заголовки - удалите первую строку songs.shift()
+            songs = songs.filter(row => row[0] && row[0].includes('http'));
+            currentIndex = 0;
+            updateStatus();
         };
-        reader.readAsArrayBuffer(file);
+        reader.readAsArrayBuffer(e.target.files[0]);
     });
 
-    // 3. Логика управления треками
-    function extractVideoID(url) {
-        if (!url) return null;
-        // Регулярка для извлечения ID из разных типов ссылок YouTube
-        const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+    function updateStatus() {
+        document.getElementById('status').innerText = songs.length > 0 
+            ? `Песня ${currentIndex + 1} из ${songs.length}` 
+            : "Файл не загружен";
+        document.getElementById('song-title').style.display = 'none';
+    }
+
+    function extractVideoId(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
         const match = url.match(regExp);
-        return (match && match[7].length == 11) ? match[7] : false;
+        return (match && match[2].length === 11) ? match[2] : null;
     }
 
-    function loadTrackUI(index) {
-        if (index >= playlist.length) {
-            alert("Игра окончена! Это была последняя песня.");
-            return;
+    function playMusic(startCol, durationCol) {
+        if (songs.length === 0) return;
+        const song = songs[currentIndex];
+        const videoId = extractVideoId(song[0]);
+        const startTime = parseInt(song[startCol]);
+        const duration = parseInt(song[durationCol]);
+
+        if (player && player.loadVideoById) {
+            clearTimeout(stopTimeout);
+            player.loadVideoById({
+                videoId: videoId,
+                startSeconds: startTime
+            });
+            player.playVideo();
+            
+            // Останавливаем через указанное время
+            stopTimeout = setTimeout(() => {
+                player.stopVideo();
+            }, duration * 1000);
         }
-        
-        const track = playlist[index];
-        document.getElementById('current-track').innerText = track.title; // Показываем название
-        document.getElementById('track-counter').innerText = `Песня ${index + 1} из ${playlist.length}`;
-        
-        // Предзагрузка видео (cueVideoById загружает, но не играет)
-        const videoId = extractVideoID(track.url);
-        if (videoId && player && player.cueVideoById) {
-            player.cueVideoById(videoId);
-            document.getElementById('status').innerText = "Готово к воспроизведению";
+    }
+
+    function showTitle() {
+        if (songs[currentIndex]) {
+            const titleDiv = document.getElementById('song-title');
+            titleDiv.innerText = songs[currentIndex][1];
+            titleDiv.style.display = 'block';
+        }
+    }
+
+    function nextSong() {
+        if (currentIndex < songs.length - 1) {
+            currentIndex++;
+            updateStatus();
+            if (player) player.stopVideo();
         } else {
-            document.getElementById('status').innerText = "Ошибка: некорректная ссылка на видео";
+            alert("Это была последняя песня!");
         }
     }
 
-    function playRound(points) {
-        if (!player || typeof player.loadVideoById !== 'function') {
-            alert("Плеер еще не загрузился, подождите секунду.");
-            return;
-        }
+    // Логика игроков
+    function addPlayer() {
+        const name = prompt("Введите имя игрока:");
+        if (!name) return;
 
-        const track = playlist[currentIndex];
-        let start, duration;
-
-        // Выбор параметров в зависимости от кнопки
-        if (points === 5) {
-            start = parseFloat(track.t5_start);
-            duration = parseFloat(track.t5_dur);
-        } else if (points === 3) {
-            start = parseFloat(track.t3_start);
-            duration = parseFloat(track.t3_dur);
-        } else {
-            start = parseFloat(track.t1_start);
-            duration = parseFloat(track.t1_dur);
-        }
-
-        // Валидация данных
-        if (isNaN(start) || isNaN(duration)) {
-            document.getElementById('status').innerText = "Ошибка данных (нет времени в Excel)";
-            return;
-        }
-
-        // Сбрасываем предыдущий таймер остановки, если нажали кнопку во время игры
-        if (stopTimer) clearTimeout(stopTimer);
-
-        document.getElementById('status').innerText = `Играет (${points} очков): ${duration} сек...`;
-
-        // Запуск видео
-        const videoId = extractVideoID(track.url);
-        player.loadVideoById({
-            videoId: videoId,
-            startSeconds: start
-        });
-
-        // Установка таймера остановки
-        stopTimer = setTimeout(() => {
-            player.pauseVideo();
-            document.getElementById('status').innerText = "Время вышло!";
-        }, duration * 1000); // секунды * 1000 = миллисекунды
+        const div = document.createElement('div');
+        div.className = 'player-row';
+        div.innerHTML = `
+            <strong>${name}</strong>: <span class="score">0</span> очков<br>
+            <button class="score-btn" onclick="updateScore(this, 6)">+6</button>
+            <button class="score-btn" onclick="updateScore(this, 3)">+6/2</button>
+            <button class="score-btn" onclick="updateScore(this, 4)">+4</button>
+            <button class="score-btn" onclick="updateScore(this, 2)">+4/2</button>
+            <button class="score-btn" onclick="updateScore(this, 2)">+2</button>
+            <button class="score-btn" onclick="updateScore(this, 1)">+2/2</button>
+        `;
+        document.getElementById('players-list').appendChild(div);
     }
 
-    function stopAudio() {
-        if (player && player.pauseVideo) {
-            player.pauseVideo();
-        }
-        if (stopTimer) clearTimeout(stopTimer);
-        document.getElementById('status').innerText = "Остановлено вручную";
+    function updateScore(btn, pts) {
+        const scoreSpan = btn.parentElement.querySelector('.score');
+        scoreSpan.innerText = parseInt(scoreSpan.innerText) + pts;
     }
-
-    function nextTrack() {
-        stopAudio();
-        currentIndex++;
-        loadTrackUI(currentIndex);
-    }
-
 </script>
+
+<script src="https://www.youtube.com/iframe_api"></script>
 
 </body>
 </html>
