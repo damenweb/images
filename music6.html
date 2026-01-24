@@ -182,14 +182,14 @@
     let timerId;
     let lastChanges = {}; // Для отмены баллов
 
-    document.getElementById('pass-field').addEventListener('input', function() {
+    /*document.getElementById('pass-field').addEventListener('input', function() {
         if (this.value === SECRET) {
             document.getElementById('auth-overlay').style.display = 'none';
         } else if (this.value.length === 6) {
             document.getElementById('auth-error').style.display = 'block';
             setTimeout(() => { this.value = ''; document.getElementById('auth-error').style.display = 'none'; }, 1000);
         }
-    });
+    });*/
 
     function onYouTubeIframeAPIReady() {
         ytPlayer = new YT.Player('yt-player', {
