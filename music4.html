@@ -312,7 +312,7 @@
 
     function toggleAnswer() {
         const box = document.getElementById('answer-box');
-        box.innerText = playlist[currentIndex] ? playlist[currentIndex][1] : "---";
+        box.innerText = playlist[currentIndex] ? playlist[currentIndex][1] : "******";
         box.style.color = "var(--gold)";
     }
 
@@ -324,7 +324,7 @@
     function resetGame() {
         clearInterval(timerId);
         document.getElementById('timer-display').innerText = "00";
-        document.getElementById('answer-box').innerText = "---";
+        document.getElementById('answer-box').innerText = "******";
         document.getElementById('answer-box').style.color = "#888";
         if(ytPlayer) ytPlayer.stopVideo();
     }
