@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Corporate Music Quiz Control</title>
+    <title>Music Quiz</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -18,7 +19,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: 'Roboto', sans-serif;
             background-color: var(--dark-bg);
             color: var(--text-color);
             margin: 0;
@@ -337,11 +338,11 @@
                 <input type="number" class="score-input" value="0" id="s-${id}">
                 <div class="points-group">
                     <button class="btn-pts gold" onclick="modScore('${id}', 4)">+4</button>
-                    <button class="btn-pts gold" onclick="modScore('${id}', 8)">+8</button>
+                    <button class="btn-pts gold" onclick="modScore('${id}', 8)">x2</button>
                     <button class="btn-pts silver" onclick="modScore('${id}', 2)">+2</button>
-                    <button class="btn-pts silver" onclick="modScore('${id}', 4)">+4</button>
+                    <button class="btn-pts silver" onclick="modScore('${id}', 4)">x2</button>
                     <button class="btn-pts bronze" onclick="modScore('${id}', 1)">+1</button>
-                    <button class="btn-pts bronze" onclick="modScore('${id}', 2)">+2</button>
+                    <button class="btn-pts bronze" onclick="modScore('${id}', 2)">x2</button>
                 </div>
             </div>
         `;
