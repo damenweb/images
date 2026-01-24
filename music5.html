@@ -120,7 +120,7 @@
             border: none; cursor: pointer; font-weight: bold; font-size: 15px; border-radius: 2px;
         }
 
-        #answer-box { font-size: 24px; height: 40px; font-weight: bold; text-align: center; margin-bottom: 10px; }
+        #answer-box { font-size: 32px; font-weight: bold; text-align: center; margin-bottom: 10px; }
 
         /* ИНФОРМАЦИОННАЯ ПАНЕЛЬ С ОЧКАМИ */
         .points-info {
@@ -316,7 +316,7 @@
     function toggleAnswer() {
         const box = document.getElementById('answer-box');
         box.innerText = playlist[currentIndex] ? playlist[currentIndex][1] : "******";
-        box.style.color = "var(--gold)";
+        /*box.style.color = "var(--gold)";*/
     }
 
     function changeTrack(dir) {
