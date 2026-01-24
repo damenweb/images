@@ -204,8 +204,8 @@
     
     <div class="play-row">
         <button class="btn-main gold" onclick="handlePlay(0)">▶ 2 сек</button>
-        <button class="btn-main silver" onclick="handlePlay(1)">▶ 6 сек</button>
-        <button class="btn-main bronze" onclick="handlePlay(2)">▶ 15 сек</button>
+        <button class="btn-main silver" onclick="handlePlay(1)">▶ 5 сек</button>
+        <button class="btn-main bronze" onclick="handlePlay(2)">▶ 10 сек</button>
     </div>
 
     <div id="answer-box">******</div>
@@ -219,8 +219,8 @@
     <div class="points-info">
         <div class="points-table">
             <span>2 сек: <b>4 очка</b></span>
-            <span>6 сек: <b>2 очка</b></span>
-            <span>15 сек: <b>1 очко</b></span>
+            <span>5 сек: <b>2 очка</b></span>
+            <span>10 сек: <b>1 очко</b></span>
         </div>
         <div class="double-points-note">
             Исполнитель + название песни = ОЧКИ УДВАИВАЮТСЯ
@@ -282,8 +282,8 @@
         const videoId = extractVideoId(row[0].toString());
         const startSec = parseInt(row[2 + type]) || 0;
         
-        const durations = [2, 6, 15];
-        const timers = [25, 30, 35];
+        const durations = [2, 5, 10];
+        const timers = [20, 23, 28];
 
         ytPlayer.loadVideoById({ videoId: videoId, startSeconds: startSec });
         setTimeout(() => ytPlayer.pauseVideo(), durations[type] * 1000);
