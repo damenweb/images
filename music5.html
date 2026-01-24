@@ -340,8 +340,8 @@ function resetGame() {
     counter.innerText = `Песня ${current}/${total}`;
 
     document.getElementById('timer-display').innerText = "00";
-    document.getElementById('answer-box').innerText = "---";
-    document.getElementById('answer-box').style.color = "#888";
+    document.getElementById('answer-box').innerText = "******";
+    document.getElementById('answer-box').style.color = "#fff";
     if(ytPlayer) ytPlayer.stopVideo();
 }
 
