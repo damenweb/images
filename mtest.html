@@ -5,86 +5,138 @@
     <title>YouTube Music Quiz</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; display: flex; gap: 20px; }
-        .main-panel { flex: 2; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .players-panel { flex: 1; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .controls { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
-        button { padding: 10px 15px; cursor: pointer; border: none; border-radius: 5px; transition: 0.3s; }
-        .btn-play { background: #28a745; color: white; }
-        .btn-next { background: #007bff; color: white; }
-        .btn-reveal { background: #ffc107; color: black; }
-        .player-row { border-bottom: 1px solid #eee; padding: 10px 0; }
-        .score-btn { padding: 2px 8px; font-size: 12px; margin: 2px; background: #e9ecef; border: 1px solid #ccc; }
-        #song-title { font-size: 24px; font-weight: bold; color: #dc3545; margin-top: 20px; display: none; }
-        #yt-player { position: absolute; top: -1000px; left: -1000px; width: 1px; height: 1px; } /* Скрываем видео */
-        .status { color: #666; margin-bottom: 10px; }
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .controls, .player-section, .quiz-section { margin-bottom: 30px; padding: 15px; border-bottom: 1px solid #eee; }
+        
+        button { cursor: pointer; padding: 10px 15px; border: none; border-radius: 5px; font-weight: bold; margin: 5px; }
+        
+        .btn-gold { background: #FFD700; color: #000; }
+        .btn-silver { background: #C0C0C0; color: #000; }
+        .btn-bronze { background: #CD7F32; color: #fff; }
+        .btn-action { background: #4CAF50; color: white; }
+        .btn-nav { background: #2196F3; color: white; }
+        .btn-danger { background: #f44336; color: white; }
+
+        #timer { font-size: 24px; font-weight: bold; color: #d32f2f; margin: 10px 0; }
+        #answer { font-size: 20px; color: #2e7d32; font-weight: bold; display: none; margin-top: 10px; }
+        
+        .player-row { display: flex; align-items: center; margin-bottom: 10px; background: #fafafa; padding: 10px; border-radius: 5px; }
+        .player-row input[type="text"] { margin-right: 10px; padding: 5px; }
+        .score-val { width: 50px; text-align: center; font-weight: bold; margin-right: 10px; }
+        
+        #yt-player { position: absolute; top: -1000px; left: -1000px; } /* Прячем видео */
     </style>
 </head>
 <body>
 
-<div class="main-panel">
-    <h2>🎵 Музыкальная Викторина</h2>
-    <input type="file" id="upload" accept=".xlsx, .xls">
-    <div id="status" class="status">Загрузите файл для начала</div>
+<div class="container">
+    <h2>Музыкальная Викторина</h2>
 
     <div class="controls">
-        <button class="btn-play" onclick="playMusic(2, 3)">Play 2s (6 очков)</button>
-        <button class="btn-play" onclick="playMusic(4, 5)">Play 6s (4 очка)</button>
-        <button class="btn-play" onclick="playMusic(6, 7)">Play 15s (2 очка)</button>
+        <input type="file" id="fileInput" accept=".xlsx, .xls">
+        <p id="status">Загрузите Excel файл для начала</p>
     </div>
 
-    <div class="controls">
-        <button class="btn-reveal" onclick="showTitle()">Показать название</button>
-        <button class="btn-next" onclick="nextSong()">Следующая песня ⏭️</button>
+    <div class="quiz-section" id="gameBoard" style="display:none;">
+        <h3>Вопрос № <span id="currentIdx">1</span></h3>
+        
+        <div id="timer">Таймер: 20</div>
+        
+        <button class="btn-gold" onclick="playSnippet(3, 2)">Play (2 sec) Золото</button>
+        <button class="btn-silver" onclick="playSnippet(4, 6)">Play (6 sec) Серебро</button>
+        <button class="btn-bronze" onclick="playSnippet(5, 15)">Play (15 sec) Бронза</button>
+        
+        <br><br>
+        <button class="btn-nav" onclick="prevTrack()">Prev</button>
+        <button class="btn-nav" onclick="nextTrack()">Next</button>
+        <button class="btn-action" onclick="toggleAnswer()">Показать ответ</button>
+        
+        <div id="answer">Ответ: <span id="answerText"></span></div>
     </div>
 
-    <div id="song-title">Название песни</div>
-    
-    <div id="yt-player"></div>
+    <div class="player-section">
+        <h3>Участники</h3>
+        <div id="playersList"></div>
+        <button class="btn-action" onclick="addPlayer()">+ Добавить участника</button>
+    </div>
 </div>
 
-<div class="players-panel">
-    <h3>Участники</h3>
-    <button onclick="addPlayer()">+ Добавить игрока</button>
-    <div id="players-list"></div>
-</div>
+<div id="yt-player"></div>
 
 <script>
-    let songs = [];
-    let currentIndex = 0;
-    let player; // Объект YouTube плеера
-    let stopTimeout;
+    let tracks = [];
+    let currentTrackIdx = 0;
+    let player;
+    let timerInterval;
+    const beep = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
 
     // Инициализация YouTube API
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('yt-player', {
             height: '1',
             width: '1',
+            videoId: '',
             events: { 'onReady': () => console.log("Player Ready") }
         });
     }
 
-    // Загрузка Excel
-    document.getElementById('upload').addEventListener('change', function(e) {
+    // Загрузка API
+    const tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    const firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+    // Обработка Excel
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
         const reader = new FileReader();
         reader.onload = function(e) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            songs = XLSX.utils.sheet_to_json(sheet, {header: 1});
-            // Фильтруем пустые строки, если есть заголовки - удалите первую строку songs.shift()
-            songs = songs.filter(row => row[0] && row[0].includes('http'));
-            currentIndex = 0;
-            updateStatus();
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            tracks = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+            
+            // Фильтруем пустые строки
+            tracks = tracks.filter(row => row[0] && row[0].includes('http'));
+            
+            currentTrackIdx = 0;
+            startGame();
         };
-        reader.readAsArrayBuffer(e.target.files[0]);
+        reader.readAsArrayBuffer(file);
     });
 
-    function updateStatus() {
-        document.getElementById('status').innerText = songs.length > 0 
-            ? `Песня ${currentIndex + 1} из ${songs.length}` 
-            : "Файл не загружен";
-        document.getElementById('song-title').style.display = 'none';
+    function startGame() {
+        if(tracks.length === 0) return;
+        document.getElementById('gameBoard').style.display = 'block';
+        updateUI();
+    }
+
+    function updateUI() {
+        document.getElementById('currentIdx').innerText = currentTrackIdx + 1;
+        document.getElementById('answer').style.display = 'none';
+        document.getElementById('answerText').innerText = tracks[currentTrackIdx][1];
+        resetTimer();
+        if(player) player.stopVideo();
+    }
+
+    function playSnippet(colIdx, duration) {
+        const url = tracks[currentTrackIdx][0];
+        const startTime = parseInt(tracks[currentTrackIdx][colIdx - 1]);
+        const videoId = extractVideoId(url);
+
+        if(!videoId) return alert("Ошибка в ссылке на YouTube");
+
+        player.loadVideoById({
+            videoId: videoId,
+            startSeconds: startTime
+        });
+
+        setTimeout(() => {
+            player.pauseVideo();
+        }, duration * 1000);
+
+        startTimer();
     }
 
     function extractVideoId(url) {
@@ -93,73 +145,69 @@
         return (match && match[2].length === 11) ? match[2] : null;
     }
 
-    function playMusic(startCol, durationCol) {
-        if (songs.length === 0) return;
-        const song = songs[currentIndex];
-        const videoId = extractVideoId(song[0]);
-        const startTime = parseInt(song[startCol]);
-        const duration = parseInt(song[durationCol]);
+    // Таймер
+    function startTimer() {
+        resetTimer();
+        let timeLeft = 20;
+        const display = document.getElementById('timer');
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            display.innerText = `Таймер: ${timeLeft}`;
+            if(timeLeft <= 0) {
+                clearInterval(timerInterval);
+                beep.play();
+            }
+        }, 1000);
+    }
 
-        if (player && player.loadVideoById) {
-            clearTimeout(stopTimeout);
-            player.loadVideoById({
-                videoId: videoId,
-                startSeconds: startTime
-            });
-            player.playVideo();
-            
-            // Останавливаем через указанное время
-            stopTimeout = setTimeout(() => {
-                player.stopVideo();
-            }, duration * 1000);
+    function resetTimer() {
+        clearInterval(timerInterval);
+        document.getElementById('timer').innerText = "Таймер: 20";
+    }
+
+    // Навигация
+    function nextTrack() {
+        if(currentTrackIdx < tracks.length - 1) {
+            currentTrackIdx++;
+            updateUI();
         }
     }
 
-    function showTitle() {
-        if (songs[currentIndex]) {
-            const titleDiv = document.getElementById('song-title');
-            titleDiv.innerText = songs[currentIndex][1];
-            titleDiv.style.display = 'block';
+    function prevTrack() {
+        if(currentTrackIdx > 0) {
+            currentTrackIdx--;
+            updateUI();
         }
     }
 
-    function nextSong() {
-        if (currentIndex < songs.length - 1) {
-            currentIndex++;
-            updateStatus();
-            if (player) player.stopVideo();
-        } else {
-            alert("Это была последняя песня!");
-        }
+    function toggleAnswer() {
+        document.getElementById('answer').style.display = 'block';
     }
 
-    // Логика игроков
+    // Система подсчета очков
     function addPlayer() {
-        const name = prompt("Введите имя игрока:");
-        if (!name) return;
-
+        const container = document.getElementById('playersList');
         const div = document.createElement('div');
         div.className = 'player-row';
         div.innerHTML = `
-            <strong>${name}</strong>: <span class="score">0</span> очков<br>
-            <button class="score-btn" onclick="updateScore(this, 6)">+6</button>
-            <button class="score-btn" onclick="updateScore(this, 3)">+6/2</button>
-            <button class="score-btn" onclick="updateScore(this, 4)">+4</button>
-            <button class="score-btn" onclick="updateScore(this, 2)">+4/2</button>
-            <button class="score-btn" onclick="updateScore(this, 2)">+2</button>
-            <button class="score-btn" onclick="updateScore(this, 1)">+2/2</button>
+            <input type="text" placeholder="Имя игрока">
+            <input type="number" class="score-val" value="0">
+            <button class="btn-gold" onclick="modScore(this, 4)">+4</button>
+            <button class="btn-gold" onclick="modScore(this, 8)">x2 (8)</button>
+            <button class="btn-silver" onclick="modScore(this, 2)">+2</button>
+            <button class="btn-silver" onclick="modScore(this, 4)">x2 (4)</button>
+            <button class="btn-bronze" onclick="modScore(this, 1)">+1</button>
+            <button class="btn-bronze" onclick="modScore(this, 2)">x2 (2)</button>
+            <button class="btn-danger" onclick="this.parentElement.remove()">Удалить</button>
         `;
-        document.getElementById('players-list').appendChild(div);
+        container.appendChild(div);
     }
 
-    function updateScore(btn, pts) {
-        const scoreSpan = btn.parentElement.querySelector('.score');
-        scoreSpan.innerText = parseInt(scoreSpan.innerText) + pts;
+    function modScore(btn, val) {
+        const input = btn.parentElement.querySelector('.score-val');
+        input.value = parseInt(input.value) + val;
     }
 </script>
 
-<script src="https://www.youtube.com/iframe_api"></script>
-
 </body>
 </html>
-
