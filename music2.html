@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Quiz Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --gold: #D4AF37;
+            --silver: #C0C0C0;
+            --bronze: #CD7F32;
+            --dark-bg: #1a1a1a;
+            --panel-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+            --accent: #4a90e2;
+        }
+
+        body {
+            font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Левая часть: Игра */
+        .game-section {
+            width: 60%;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-right: 1px solid #444;
+        }
+
+        /* Правая часть: Игроки */
+        .players-section {
+            width: 40%;
+            padding: 30px;
+            background-color: var(--panel-bg);
+            overflow-y: auto;
+        }
+
+        /* Кнопка загрузки */
+        .upload-container {
+            position: absolute;
+            top: 20px;
+            right: 42%;
+            z-index: 100;
+        }
+
+        .btn-upload {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn-upload:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Таймер */
+        #timer-display {
+            font-size: 80px;
+            font-weight: bold;
+            margin: 20px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Игровые кнопки */
+        .play-buttons {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .btn-play {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-play:active { transform: scale(0.95); }
+
+        .gold { background: var(--gold); color: #000; box-shadow: 0 0 15px rgba(212, 175, 55, 0.4); }
+        .silver { background: var(--silver); color: #000; box-shadow: 0 0 15px rgba(192, 192, 192, 0.4); }
+        .bronze { background: var(--bronze); color: #000; box-shadow: 0 0 15px rgba(205, 127, 50, 0.4); }
+
+        /* Управление треками */
+        .track-controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .btn-nav {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        #answer-display {
+            margin-top: 20px;
+            font-size: 24px;
+            min-height: 30px;
+            color: var(--accent);
+            text-align: center;
+        }
+
+        /* Секция игроков */
+        .player-card {
+            background: #3d3d3d;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+        }
+
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .player-name {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #666;
+            color: white;
+            font-size: 18px;
+            width: 60%;
+        }
+
+        .score-input {
+            width: 60px;
+            background: #222;
+            border: 1px solid #555;
+            color: var(--gold);
+            text-align: center;
+            font-size: 18px;
+        }
+
+        .score-btns {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+        }
+
+        .score-btns button {
+            border: none;
+            padding: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 3px;
+        }
+
+        .hint-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        /* Скрытый плеер */
+        #youtube-player-container {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="upload-container">
+    <input type="file" id="excel-upload" hidden accept=".xlsx, .xls">
+    <button class="btn-upload" onclick="document.getElementById('excel-upload').click()">ЗАГРУЗИТЬ EXCEL</button>
+</div>
+
+<div class="game-section">
+    <div id="timer-display">00</div>
+    
+    <div class="play-buttons">
+        <button class="btn-play gold" onclick="playMusic(0)">2 sec</button>
+        <button class="btn-play silver" onclick="playMusic(1)">6 sec</button>
+        <button class="btn-play bronze" onclick="playMusic(2)">15 sec</button>
+    </div>
+
+    <div id="answer-display">---</div>
+
+    <div class="track-controls">
+        <button class="btn-nav" onclick="prevTrack()">Prev</button>
+        <button class="btn-nav" style="background: var(--accent)" onclick="showAnswer()">Показать ответ</button>
+        <button class="btn-nav" onclick="nextTrack()">Next</button>
+    </div>
+
+    <div class="hint-text">
+        * Если угадан исполнитель + название песни — очки удваиваются!
+    </div>
+</div>
+
+<div class="players-section">
+    <button class="btn-nav" style="width: 100%; margin-bottom: 20px;" onclick="addPlayer()">+ Добавить участника</button>
+    <div id="players-list"></div>
+</div>
+
+<div id="youtube-player-container">
+    <div id="player"></div>
+</div>
+
+<script>
+    let songs = [];
+    let currentIndex = 0;
+    let player;
+    let timerInterval;
+    let countdownTimeout;
+
+    // Инициализация YouTube API
+    function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+            height: '1px',
+            width: '1px',
+            playerVars: { 'autoplay': 0, 'controls': 0 },
+            events: { 'onReady': () => console.log("Player Ready") }
+        });
+    }
+
+    // Загрузка Excel
+    document.getElementById('excel-upload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const data = evt.target.result;
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            songs = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            // Фильтруем пустые строки
+            songs = songs.filter(row => row[0] && row[0].includes('http'));
+            currentIndex = 0;
+            resetUI();
+            alert("Файл загружен! Песен обнаружено: " + songs.length);
+        };
+        reader.readAsBinaryString(file);
+    });
+
+    function playMusic(type) {
+        if (!songs[currentIndex]) return;
+        
+        const songData = songs[currentIndex];
+        const url = songData[0];
+        const videoId = extractId(url);
+        
+        // Времена старта из колонок 3, 4, 5 (индексы 2, 3, 4)
+        const startSec = parseInt(songData[2 + type]) || 0;
+        const durations = [2, 6, 15];
+        const timerValues = [25, 25, 35];
+        
+        const duration = durations[type];
+        const timerLimit = timerValues[type];
+
+        // Воспроизведение
+        player.loadVideoById({
+            videoId: videoId,
+            startSeconds: startSec
+        });
+        
+        setTimeout(() => {
+            player.pauseVideo();
+        }, duration * 1000);
+
+        startTimer(timerLimit);
+    }
+
+    function startTimer(seconds) {
+        clearInterval(timerInterval);
+        clearTimeout(countdownTimeout);
+        
+        let timeLeft = seconds;
+        document.getElementById('timer-display').innerText = timeLeft;
+        
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer-display').innerText = timeLeft < 10 ? '0' + timeLeft : timeLeft;
+            
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                playBeep();
+            }
+        }, 1000);
+    }
+
+    function playBeep() {
+        const context = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = context.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, context.currentTime);
+        osc.connect(context.destination);
+        osc.start();
+        osc.stop(context.currentTime + 2);
+    }
+
+    function extractId(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    function showAnswer() {
+        if (songs[currentIndex]) {
+            document.getElementById('answer-display').innerText = songs[currentIndex][1];
+        }
+    }
+
+    function nextTrack() {
+        if (currentIndex < songs.length - 1) {
+            currentIndex++;
+            resetUI();
+        }
+    }
+
+    function prevTrack() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            resetUI();
+        }
+    }
+
+    function resetUI() {
+        document.getElementById('answer-display').innerText = "---";
+        document.getElementById('timer-display').innerText = "00";
+        clearInterval(timerInterval);
+        player.stopVideo();
+    }
+
+    // Логика игроков
+    function addPlayer() {
+        const id = Date.now();
+        const html = `
+            <div class="player-card" id="p-${id}">
+                <div class="player-header">
+                    <input type="text" class="player-name" placeholder="Имя игрока">
+                    <input type="number" class="score-input" value="0" id="s-${id}">
+                    <button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:red; cursor:pointer">✕</button>
+                </div>
+                <div class="score-btns">
+                    <button class="gold" onclick="addScore('${id}', 4)">+4</button>
+                    <button class="gold" onclick="addScore('${id}', 8)">+8</button>
+                    <button class="silver" onclick="addScore('${id}', 2)">+2</button>
+                    <button class="silver" onclick="addScore('${id}', 4)">+4</button>
+                    <button class="bronze" onclick="addScore('${id}', 1)">+1</button>
+                    <button class="bronze" onclick="addScore('${id}', 2)">+2</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('players-list').insertAdjacentHTML('beforeend', html);
+    }
+
+    function addScore(id, value) {
+        const input = document.getElementById(`s-${id}`);
+        input.value = parseInt(input.value) + value;
+    }
+</script>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
