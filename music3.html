@@ -297,7 +297,7 @@
         osc.frequency.setValueAtTime(600, audioCtx.currentTime);
         osc.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.6); // Звук 600 миллисекунд
+        osc.stop(audioCtx.currentTime + 0.4); // Звук 400 миллисекунд
     }
 
     function extractVideoId(url) {
@@ -333,11 +333,11 @@
                 <input type="number" class="score-input" value="0" id="s-${id}">
                 <div class="points-group">
                     <button class="btn-pts gold" onclick="modScore('${id}', 4)">+4</button>
-                    <button class="btn-pts gold" onclick="modScore('${id}', 8)">+8</button>
+                    <button class="btn-pts gold" onclick="modScore('${id}', 8)">x2</button>
                     <button class="btn-pts silver" onclick="modScore('${id}', 2)">+2</button>
-                    <button class="btn-pts silver" onclick="modScore('${id}', 4)">+4</button>
+                    <button class="btn-pts silver" onclick="modScore('${id}', 4)">x2</button>
                     <button class="btn-pts bronze" onclick="modScore('${id}', 1)">+1</button>
-                    <button class="btn-pts bronze" onclick="modScore('${id}', 2)">+2</button>
+                    <button class="btn-pts bronze" onclick="modScore('${id}', 2)">x2</button>
                 </div>
             </div>
         `;
