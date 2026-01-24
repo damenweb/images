@@ -1,257 +1,154 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Excel Player (Audio Only)</title>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <style>
-        body {
-            font-family: sans-serif;
-            padding: 20px;
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #f4f4f9;
-        }
-        .container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        h2 { margin-top: 0; }
-        .controls { margin: 20px 0; display: flex; gap: 10px; flex-direction: column; }
-        
-        button {
-            padding: 10px 20px;
-            cursor: pointer;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        button:active { background-color: #0056b3; }
-
-        #status {
-            margin-top: 15px;
-            padding: 10px;
-            background: #e9ecef;
-            border-radius: 4px;
-            font-family: monospace;
-            white-space: pre-wrap;
-        }
-
-        /* СКРЫВАЕМ ПЛЕЕР (для эффекта Audio Only) */
-        #player-container {
-            position: absolute;
-            top: -9999px;
-            left: -9999px;
-            width: 1px;
-            height: 1px;
-            visibility: hidden;
-            opacity: 0;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>YouTube Audio Quiz</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    button { margin: 5px; padding: 10px 15px; }
+    #status { margin-top: 15px; font-weight: bold; }
+  </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>🎵 Excel YouTube Player</h2>
-    <p>Загрузите .xlsx файл (ссылки должны быть в 1-м столбце).</p>
+<h2>YouTube Audio Quiz</h2>
 
-    <div class="controls">
-        <input type="file" id="fileInput" accept=".xlsx, .xls" />
-        <button id="playBtn" disabled>▶ Воспроизвести (3 сек)</button>
-    </div>
+<input type="file" id="fileInput" accept=".xlsx,.xls">
+<br><br>
 
-    <div id="status">Ожидание файла...</div>
-    
-    <div id="player-container">
-        <div id="player"></div>
-    </div>
-</div>
+<button onclick="playSegment(0)">Play (5 очков)</button>
+<button onclick="playSegment(1)">Play (3 очка)</button>
+<button onclick="playSegment(2)">Play (1 очко)</button>
+<button onclick="nextTrack()">Next</button>
+
+<div id="status">Файл не загружен</div>
+
+<!-- Скрытый плеер -->
+<div id="player"></div>
+
+<!-- XLSX -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- YouTube API -->
+<script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
-    // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
-    let player; 
-    let youtubeIds = [];
-    let currentIndex = 0;
-    let isPlaying = false;
-    let stopTimer = null;
+let tracks = [];
+let currentIndex = 0;
+let player = null;
+let stopTimeout = null;
 
-    const statusDiv = document.getElementById('status');
-    const playBtn = document.getElementById('playBtn');
-    const fileInput = document.getElementById('fileInput');
+// ===== Helpers =====
+function parseTime(str) {
+  if (!str) return null;
+  const parts = str.toString().split(':');
+  if (parts.length !== 2) return null;
+  return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+}
 
-    // --- 1. ИНИЦИАЛИЗАЦИЯ YOUTUBE API ---
-    // Мы загружаем API асинхронно
-    var tag = document.createElement('script');
-    tag.src = "https://www.youtube.com/iframe_api";
-    var firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+function extractVideoId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtu.be')) return u.pathname.slice(1);
+    return u.searchParams.get('v');
+  } catch {
+    return null;
+  }
+}
 
-    function onYouTubeIframeAPIReady() {
-        player = new YT.Player('player', {
-            height: '200',
-            width: '200',
-            playerVars: {
-                'playsinline': 1,
-                'controls': 0, // Без элементов управления
-                'disablekb': 1 // Без клавиатуры
-            },
-            events: {
-                'onReady': onPlayerReady,
-                'onStateChange': onPlayerStateChange,
-                'onError': onPlayerError
-            }
-        });
+// ===== File loading =====
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = evt => {
+    try {
+      const wb = XLSX.read(evt.target.result, { type: 'binary' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+      tracks = rows
+        .map(r => {
+          const videoId = extractVideoId(r[0]);
+          if (!videoId) return null;
+
+          return {
+            videoId,
+            title: r[1] || 'Без названия',
+            segments: [
+              { start: parseTime(r[2]), duration: r[3] },
+              { start: parseTime(r[4]), duration: r[5] },
+              { start: parseTime(r[6]), duration: r[7] }
+            ]
+          };
+        })
+        .filter(Boolean);
+
+      currentIndex = 0;
+      document.getElementById('status').textContent =
+        `Загружено треков: ${tracks.length}`;
+
+    } catch (err) {
+      alert('Ошибка чтения файла');
+      console.error(err);
     }
+  };
+  reader.readAsBinaryString(file);
+});
 
-    function onPlayerReady(event) {
-        log("API YouTube готово. Жду файл.");
+// ===== YouTube =====
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player('player', {
+    height: '0',
+    width: '0',
+    playerVars: {
+      autoplay: 0,
+      controls: 0,
+      disablekb: 1,
+      fs: 0,
+      rel: 0
     }
+  });
+}
 
-    // --- 2. ОБРАБОТКА EXCEL ФАЙЛА ---
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+// ===== Playback =====
+function playSegment(typeIndex) {
+  if (!tracks.length) return alert('Сначала загрузите файл');
 
-        log("Чтение файла...");
-        const reader = new FileReader();
+  const track = tracks[currentIndex];
+  const segment = track.segments[typeIndex];
 
-        reader.onload = (e) => {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                
-                // Берем первый лист
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
+  if (!segment || segment.start == null || !segment.duration) {
+    return alert('Нет данных для этого режима');
+  }
 
-                // Конвертируем в JSON (массив массивов)
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+  clearTimeout(stopTimeout);
 
-                // Извлекаем ID из первого столбца (индекс 0)
-                youtubeIds = [];
-                jsonData.forEach((row, index) => {
-                    if (row[0]) {
-                        const url = String(row[0]);
-                        const id = extractVideoID(url);
-                        if (id) {
-                            youtubeIds.push(id);
-                        } else {
-                            console.warn(`Строка ${index+1}: Некорректная ссылка YouTube (${url})`);
-                        }
-                    }
-                });
+  player.loadVideoById({
+    videoId: track.videoId,
+    startSeconds: segment.start
+  });
 
-                if (youtubeIds.length > 0) {
-                    currentIndex = 0;
-                    playBtn.disabled = false;
-                    playBtn.textContent = `▶ Воспроизвести трек 1 из ${youtubeIds.length}`;
-                    log(`Загружено ${youtubeIds.length} треков. Нажмите Play.`);
-                } else {
-                    log("Ошибка: Не найдено ссылок YouTube в первом столбце.");
-                }
+  document.getElementById('status').textContent =
+    `▶ ${track.title} (${segment.duration} сек)`;
 
-            } catch (err) {
-                log("Ошибка чтения Excel: " + err.message);
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    });
+  stopTimeout = setTimeout(() => {
+    player.stopVideo();
+  }, segment.duration * 1000);
+}
 
-    // --- 3. ЛОГИКА ВОСПРОИЗВЕДЕНИЯ ---
-    playBtn.addEventListener('click', () => {
-        if (youtubeIds.length === 0) return;
+function nextTrack() {
+  if (!tracks.length) return;
+  clearTimeout(stopTimeout);
+  player.stopVideo();
 
-        // Если мы дошли до конца списка, сброс в начало (опционально)
-        if (currentIndex >= youtubeIds.length) {
-            currentIndex = 0;
-            log("Список завершен. Начинаем сначала.");
-        }
+  currentIndex++;
+  if (currentIndex >= tracks.length) currentIndex = 0;
 
-        const videoId = youtubeIds[currentIndex];
-        
-        // Остановка предыдущих таймеров
-        if (stopTimer) clearTimeout(stopTimer);
-        
-        log(`Загрузка трека ${currentIndex + 1}/${youtubeIds.length} (ID: ${videoId})...`);
-        
-        // Загружаем видео. autoplay сработает, так как действие вызвано кликом пользователя
-        player.loadVideoById(videoId);
-        
-        // Обновляем кнопку
-        playBtn.disabled = true; // Блокируем пока играет
-    });
-
-    function onPlayerStateChange(event) {
-        // YT.PlayerState.PLAYING = 1
-        if (event.data == YT.PlayerState.PLAYING) {
-            log(`▶ Играет... (Таймер 3 сек запущен)`);
-            
-            // Таймер остановки
-            stopTimer = setTimeout(() => {
-                player.stopVideo(); // Полная остановка
-                log("⏹ Стоп (3 секунды истекли).");
-                prepareNextTrack();
-            }, 3000); // 3000 мс = 3 секунды
-        }
-    }
-
-    function prepareNextTrack() {
-        currentIndex++;
-        playBtn.disabled = false;
-        if (currentIndex < youtubeIds.length) {
-            playBtn.textContent = `▶ Следующий (Трек ${currentIndex + 1})`;
-        } else {
-            playBtn.textContent = `▶ Начать сначала`;
-        }
-    }
-
-    // --- 4. ОБРАБОТКА ОШИБОК (Предвидение проблем) ---
-    function onPlayerError(event) {
-        // Коды ошибок API:
-        // 2 – неверный ID
-        // 100 – видео удалено или скрыто
-        // 101, 150 – запрещено встраивание (embedding disabled)
-        
-        let errorMsg = "";
-        switch(event.data) {
-            case 2: errorMsg = "Неверный ID видео."; break;
-            case 100: errorMsg = "Видео удалено или приватно."; break;
-            case 101: 
-            case 150: errorMsg = "Автор запретил встраивание видео."; break;
-            default: errorMsg = "Неизвестная ошибка плеера.";
-        }
-
-        log(`⚠️ Ошибка трека ${currentIndex + 1}: ${errorMsg}. Пропуск...`);
-        
-        // Автоматически пытаемся играть следующее, чтобы не ломать флоу
-        if (stopTimer) clearTimeout(stopTimer);
-        prepareNextTrack(); 
-        
-        // Небольшая задержка перед авто-кликом следующего (чтобы не было вечного цикла, если все битые)
-        // Но так как мы требуем нажатия кнопки для следующего, мы просто разблокируем кнопку.
-        // Если хотите авто-скип, раскомментируйте строку ниже:
-        // setTimeout(() => playBtn.click(), 1000); 
-    }
-
-    // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-
-    // Мощная регулярка для вытаскивания ID из любого типа ссылок (short, full, mobile)
-    function extractVideoID(url) {
-        const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-        const match = url.match(regExp);
-        return (match && match[7].length == 11) ? match[7] : false;
-    }
-
-    function log(msg) {
-        statusDiv.textContent = msg;
-        console.log(msg);
-    }
+  document.getElementById('status').textContent =
+    `Следующий трек: ${tracks[currentIndex].title}`;
+}
 </script>
 
 </body>
