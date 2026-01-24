@@ -120,7 +120,7 @@
     <div class="play-row">
         <button class="btn-main gold" onclick="handlePlay(0)">▶ 1.5 сек</button>
         <button class="btn-main silver" onclick="handlePlay(1)">▶ 5 сек</button>
-        <button class="btn-main bronze" onclick="handlePlay(2)">▶ 10 сек</button>
+        <button class="btn-main bronze" onclick="handlePlay(2)">▶ 12 сек</button>
         <button class="btn-main full-play" onclick="handlePlay(3)">▶</button>
     </div>
 
@@ -136,7 +136,7 @@
         <div class="points-table">
             <span>1.5 сек: <b>4 очка</b></span>
             <span>5 сек: <b>2 очка</b></span>
-            <span>10 сек: <b>1 очко</b></span>
+            <span>12 сек: <b>1 очко</b></span>
         </div>
         <div class="double-points-note">Исполнитель + название песни = ОЧКИ УДВАИВАЮТСЯ</div>
     </div>
@@ -214,8 +214,8 @@
         // Если тип 3 (1 минута), берем старт из столбца "2 сек" (индекс 2 в массиве)
         const startSec = (type === 3) ? (parseInt(row[2]) || 0) : (parseInt(row[2 + type]) || 0);
         
-        const durations = [1.5, 5, 10, 60];
-        const timers = [20, 23, 28, 60];
+        const durations = [1.5, 5, 12, 60];
+        const timers = [20, 25, 30, 60];
 
         currentDuration = durations[type];
 
