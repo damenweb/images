@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Quiz Pro - Stable Sync</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --gold: #D4AF37;
+            --silver: #B0B0B0;
+            --bronze: #A0522D;
+            --dark-bg: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #ffffff;
+            --accent: #0078d4;
+            --border: #333333;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-section {
+            width: 60%; padding: 40px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; border-right: 1px solid var(--border);
+            position: relative;
+        }
+        .players-section {
+            width: 40%; padding: 20px; background-color: var(--panel-bg);
+            display: flex; flex-direction: column; overflow-y: auto;
+        }
+
+        .upload-area { position: absolute; top: 20px; left: 20px; display: flex; gap: 10px; }
+        .add-player-area { position: absolute; top: 20px; right: 20px; }
+
+        .btn-action {
+            background: transparent; border: 1px solid var(--accent); color: var(--accent);
+            padding: 8px 16px; cursor: pointer; font-size: 11px; text-transform: uppercase;
+        }
+        .btn-action:hover { background: var(--accent); color: #fff; }
+
+        #track-counter { font-size: 32px; color: white; font-weight: bold; margin-bottom: 10px; }
+        #timer-display {
+            font-size: 140px; font-weight: 200; margin-bottom: 10px;
+            font-family: 'Courier New', monospace; color: var(--accent);
+        }
+
+        .play-row { display: flex; gap: 15px; margin-bottom: 30px; }
+        .btn-main {
+            width: 100px; height: 100px; border-radius: 50%; border: none;
+            cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .btn-main:active { transform: scale(0.95); }
+        .gold { background: var(--gold); color: #fff; }
+        .silver { background: var(--silver); color: #fff; }
+        .bronze { background: var(--bronze); color: #fff; }
+        .full-play { background: var(--accent); color: #fff; }
+
+        #answer-box { font-size: 32px; font-weight: bold; text-align: center; margin-bottom: 10px; min-height: 40px; }
+
+        .nav-row { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
+        .btn-nav {
+            padding: 10px 25px; background: #333; color: #fff;
+            border: none; cursor: pointer; font-weight: bold; font-size: 15px; border-radius: 2px; min-width: 160px;
+        }
+
+        .points-info {
+            width: 80%; margin-top: 20px; padding-top: 20px; border-top: 1px solid #333; text-align: center;
+        }
+        .points-table { display: flex; justify-content: center; gap: 30px; margin-bottom: 15px; font-size: 14px; color: #aaa; }
+        .points-table span b { color: #fff; }
+        .double-points-note { color: var(--gold); font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+
+        .player-row {
+            display: flex; align-items: center; gap: 8px;
+            background: #252525; padding: 6px 10px; margin-bottom: 6px; border-radius: 4px;
+        }
+        .player-name {
+            flex: 1; background: #121212; border: 1px solid #444;
+            color: #fff; padding: 6px; border-radius: 2px; font-size: 14px; font-family: 'Roboto', sans-serif;
+        }
+        .score-input {
+            width: 50px; background: #000; border: 1px solid var(--accent);
+            color: #fff; padding: 6px 0; text-align: center; font-weight: bold; font-size: 14px;
+        }
+        .points-group { display: flex; gap: 3px; }
+        .btn-pts { border: none; padding: 5px; font-size: 12px; font-weight: bold; cursor: pointer; border-radius: 2px; min-width: 32px; font-family: 'Roboto', sans-serif; }
+        .btn-del { background: none; border: none; color: #555; cursor: pointer; padding: 0 5px; font-size: 16px; }
+        .btn-undo { background: #444; color: #fff; border: none; cursor: pointer; padding: 5px 8px; border-radius: 2px; font-size: 12px; }
+
+        #player-api-container { position: absolute; left: -9999px; }
+    </style>
+</head>
+<body>
+
+<div class="game-section">
+    <div class="upload-area">
+        <input type="file" id="excel-file" hidden accept=".xlsx, .xls">
+        <button class="btn-action" onclick="document.getElementById('excel-file').click()">Файл</button>
+        <input type="text" id="gsheets-url" class="player-name" style="width: 200px; font-size: 11px;" placeholder="Google Sheets CSV URL">
+        <button class="btn-action" onclick="loadFromGSheets()">Загрузить по ссылке</button>
+    </div>
+
+    <div class="add-player-area">
+        <button class="btn-action" onclick="addPlayer()">+ Добавить участника</button>
+    </div>
+
+    <div id="track-counter">Песня 0/0</div>
+    <div id="timer-display">00</div>
+    
+    <div class="play-row">
+        <button class="btn-main gold" onclick="handlePlay(0)">▶ 2 сек</button>
+        <button class="btn-main silver" onclick="handlePlay(1)">▶ 5 сек</button>
+        <button class="btn-main bronze" onclick="handlePlay(2)">▶ 10 сек</button>
+        <button class="btn-main full-play" onclick="handlePlay(3)">▶ 1 мин</button>
+    </div>
+
+    <div id="answer-box">******</div>
+
+    <div class="nav-row">
+        <button class="btn-nav" style="min-width: 60px;" onclick="changeTrack(-1)">⏮</button>
+        <button id="toggle-ans-btn" class="btn-nav" style="background: var(--accent)" onclick="toggleAnswer()">Показать ответ</button>
+        <button class="btn-nav" style="min-width: 60px;" onclick="changeTrack(1)">⏭</button>
+    </div>
+
+    <div class="points-info">
+        <div class="points-table">
+            <span>2 сек: <b>4 очка</b></span>
+            <span>5 сек: <b>2 очка</b></span>
+            <span>10 сек: <b>1 очко</b></span>
+        </div>
+        <div class="double-points-note">Исполнитель + название песни = ОЧКИ УДВАИВАЮТСЯ</div>
+    </div>
+</div>
+
+<div class="players-section">
+    <div id="players-list"></div>
+</div>
+
+<div id="player-api-container"><div id="yt-player"></div></div>
+
+<script>
+    let playlist = [];
+    let currentIndex = 0;
+    let ytPlayer;
+    let timerId;
+    let lastChanges = {}; 
+    let playTimeout; 
+    let currentDuration = 0;
+    let isAnswerShown = false;
+
+    function onYouTubeIframeAPIReady() {
+        ytPlayer = new YT.Player('yt-player', {
+            height: '1', width: '1',
+            playerVars: { 'autoplay': 0, 'controls': 0, 'origin': window.location.origin },
+            events: { 
+                'onReady': () => console.log("System Ready"),
+                'onStateChange': onPlayerStateChange 
+            }
+        });
+    }
+
+    function onPlayerStateChange(event) {
+        if (event.data == YT.PlayerState.PLAYING) {
+            clearTimeout(playTimeout);
+            playTimeout = setTimeout(() => {
+                ytPlayer.pauseVideo();
+            }, currentDuration * 1000);
+        }
+    }
+
+    async function loadFromGSheets() {
+        const url = document.getElementById('gsheets-url').value;
+        if (!url) return alert("Введите ссылку!");
+        try {
+            const response = await fetch(url);
+            const csvText = await response.text();
+            const workbook = XLSX.read(csvText, { type: 'string' });
+            processData(workbook);
+            alert("Таблица загружена!");
+        } catch (e) { alert("Ошибка загрузки. Проверьте публикацию CSV."); }
+    }
+
+    document.getElementById('excel-file').addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = (event) => processData(XLSX.read(event.target.result, { type: 'binary' }));
+        reader.readAsBinaryString(e.target.files[0]);
+    });
+
+    function processData(workbook) {
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        playlist = XLSX.utils.sheet_to_json(sheet, { header: 1 })
+                    .filter(row => row[0] && row[0].toString().includes('http'));
+        currentIndex = 0;
+        resetGame();
+    }
+
+    function handlePlay(type) {
+        if (!playlist[currentIndex]) return;
+        
+        clearTimeout(playTimeout);
+        const row = playlist[currentIndex];
+        const videoId = extractVideoId(row[0].toString());
+        
+        // Если тип 3 (1 минута), берем старт из столбца "2 сек" (индекс 2 в массиве)
+        const startSec = (type === 3) ? (parseInt(row[2]) || 0) : (parseInt(row[2 + type]) || 0);
+        
+        const durations = [2, 5, 10, 60];
+        const timers = [20, 23, 28, 60];
+
+        currentDuration = durations[type];
+
+        ytPlayer.loadVideoById({ 
+            videoId: videoId, 
+            startSeconds: startSec 
+        });
+
+        runTimer(timers[type]);
+    }
+
+    function runTimer(seconds) {
+        clearInterval(timerId);
+        let left = seconds;
+        document.getElementById('timer-display').innerText = left;
+        timerId = setInterval(() => {
+            left--;
+            document.getElementById('timer-display').innerText = left < 10 ? '0' + left : left;
+            if (left <= 0) {
+                clearInterval(timerId);
+                triggerBeep();
+            }
+        }, 1000);
+    }
+
+    function triggerBeep() {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        osc.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4); 
+    }
+
+    function extractVideoId(url) {
+        const m = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=)?(.+)/);
+        return m ? m[1].split('&')[0] : null;
+    }
+
+    function toggleAnswer() {
+        const box = document.getElementById('answer-box');
+        const btn = document.getElementById('toggle-ans-btn');
+        
+        if (!isAnswerShown) {
+            // Показываем
+            box.innerText = playlist[currentIndex] ? (playlist[currentIndex][1] || "Название отсутствует") : "******";
+            btn.innerText = "Скрыть ответ";
+            btn.style.background = "#d43737"; // Красный для "Скрыть"
+            isAnswerShown = true;
+        } else {
+            // Скрываем
+            box.innerText = "******";
+            btn.innerText = "Показать ответ";
+            btn.style.background = "var(--accent)";
+            isAnswerShown = false;
+        }
+    }
+
+    function changeTrack(dir) {
+        currentIndex = Math.max(0, Math.min(playlist.length - 1, currentIndex + dir));
+        resetGame();
+    }
+
+    function resetGame() {
+        clearInterval(timerId);
+        clearTimeout(playTimeout);
+        lastChanges = {}; 
+        isAnswerShown = false;
+
+        const counter = document.getElementById('track-counter');
+        const total = playlist.length;
+        counter.innerText = `Песня ${total > 0 ? currentIndex + 1 : 0}/${total}`;
+
+        document.getElementById('timer-display').innerText = "00";
+        document.getElementById('answer-box').innerText = "******";
+        
+        const btn = document.getElementById('toggle-ans-btn');
+        btn.innerText = "Показать ответ";
+        btn.style.background = "var(--accent)";
+        
+        document.querySelectorAll('.btn-pts').forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.style.cursor = "pointer";
+        });
+
+        if(ytPlayer) ytPlayer.stopVideo();
+    }
+
+    function addPlayer() {
+        const id = Date.now();
+        const row = `
+            <div class="player-row" id="p-${id}">
+                <button class="btn-del" onclick="this.parentElement.remove()">✕</button>
+                <button class="btn-undo" onclick="undoScore('${id}')" title="Undo">↶</button>
+                <input type="text" class="player-name" placeholder="Игрок">
+                <input type="number" class="score-input" value="0" id="s-${id}">
+                <div class="points-group">
+                    <button class="btn-pts gold" onclick="modScore('${id}', 4, this)">+4</button>
+                    <button class="btn-pts gold" onclick="modScore('${id}', 8, this)">x2</button>
+                    <button class="btn-pts silver" onclick="modScore('${id}', 2, this)">+2</button>
+                    <button class="btn-pts silver" onclick="modScore('${id}', 4, this)">x2</button>
+                    <button class="btn-pts bronze" onclick="modScore('${id}', 1, this)">+1</button>
+                    <button class="btn-pts bronze" onclick="modScore('${id}', 2, this)">x2</button>
+                </div>
+            </div>`;
+        document.getElementById('players-list').insertAdjacentHTML('beforeend', row);
+    }
+
+    function modScore(id, val, btnElement) {
+        const input = document.getElementById('s-' + id);
+        lastChanges[id] = val; 
+        input.value = parseInt(input.value) + val;
+        btnElement.parentElement.querySelectorAll('.btn-pts').forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = "0.3";
+            btn.style.cursor = "not-allowed";
+        });
+    }
+
+    function undoScore(id) {
+        if (lastChanges[id] !== undefined) {
+            const input = document.getElementById('s-' + id);
+            input.value = parseInt(input.value) - lastChanges[id];
+            delete lastChanges[id];
+            document.getElementById('p-' + id).querySelectorAll('.btn-pts').forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = "1";
+                btn.style.cursor = "pointer";
+            });
+        }
+    }
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
