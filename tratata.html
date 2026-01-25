@@ -1,137 +1,199 @@
-<script>
-    const S_URL = 'https://gatadttzyeusozvkwvai.supabase.co';
-    const S_KEY = 'sb_publishable_cwXp1mw42C6sDXoeszY8sw_lYrAAefY';
-    const supabaseClient = supabase.createClient(S_URL, S_KEY);
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Player - Live</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { background: #121212; color: white; font-family: 'Roboto', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .box { background: #1e1e1e; padding: 25px; border-radius: 15px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; }
+        input { width: 100%; padding: 15px; margin: 10px 0; background: #2b2b2b; border: 1px solid #444; color: white; border-radius: 8px; font-size: 16px; box-sizing: border-box; outline: none; }
+        input:focus { border-color: #0078d4; }
+        button { width: 100%; padding: 15px; background: #0078d4; border: none; color: white; font-weight: bold; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 5px; transition: 0.2s; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: #333; color: #777; cursor: not-allowed; transform: none; }
+        .btn-edit { background: transparent; color: #888; font-size: 12px; text-decoration: underline; margin-top: 10px; width: auto; padding: 5px; border: none; cursor: pointer; }
+        .hidden { display: none; }
+        #status { margin-top: 15px; font-size: 0.9em; color: #888; min-height: 1.2em; }
 
-    let mySavedName = localStorage.getItem('quiz_player_name');
-    let myLogin = "";
-    let localTimerId;
-    let currentLvlPrefix = ""; 
-    let hasSentAnswer = false; // НОВАЯ ПЕРЕМЕННАЯ: флаг отправки
+        /* ТАЙМЕР */
+        #player-timer {
+            font-size: 64px; font-weight: bold; color: #0078d4; 
+            margin-bottom: 10px; font-family: monospace;
+        }
+        .timer-low { color: #ff4d4d !important; }
+        
+        .lvl-indicator { font-size: 12px; color: #D4AF37; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
 
-    window.onload = async () => {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (user) handleUserSession(user);
-    };
+    <div id="auth-screen" class="box">
+        <h2>Вход в Quiz</h2>
+        <input type="email" id="email" placeholder="Логин (player1@quiz.com)">
+        <input type="password" id="password" placeholder="Пароль">
+        <button onclick="signIn()">Войти</button>
+        <div id="auth-status" style="color: #ff4d4d; margin-top: 10px;"></div>
+    </div>
 
-    async function signIn() {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) document.getElementById('auth-status').innerText = "Ошибка: " + error.message;
-        else handleUserSession(data.user);
-    }
+    <div id="name-screen" class="box hidden">
+        <h2>Твоё имя</h2>
+        <input type="text" id="pName" placeholder="Введи имя для таблицы...">
+        <button onclick="saveName()">Сохранить</button>
+    </div>
 
-    function handleUserSession(user) {
-        myLogin = user.email.split('@')[0];
-        document.getElementById('auth-screen').classList.add('hidden');
-        if (!mySavedName) {
-            document.getElementById('name-screen').classList.remove('hidden');
-        } else {
+    <div id="game-screen" class="box hidden">
+        <div id="lvl-badge" class="lvl-indicator">ОЖИДАНИЕ ТРЕКА</div>
+        <div id="player-timer">00</div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span id="display-name" style="font-weight: bold; color: #0078d4;"></span>
+            <button class="btn-edit" onclick="editName()">Изм.</button>
+        </div>
+
+        <input type="text" id="pAns" placeholder="Твой ответ...">
+        <button id="sendBtn" onclick="send()" disabled>Отправить ответ</button>
+        <div id="status">Ждем начала раунда...</div>
+    </div>
+
+    <script>
+        const S_URL = 'https://gatadttzyeusozvkwvai.supabase.co';
+        const S_KEY = 'sb_publishable_cwXp1mw42C6sDXoeszY8sw_lYrAAefY';
+        const supabaseClient = supabase.createClient(S_URL, S_KEY);
+
+        let mySavedName = localStorage.getItem('quiz_player_name');
+        let myLogin = "";
+        let localTimerId;
+        let currentLvlPrefix = ""; 
+        let hasSentAnswer = false; // Флаг, ограничивающий ответ 1 раз за трек
+
+        window.onload = async () => {
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (user) handleUserSession(user);
+        };
+
+        async function signIn() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) document.getElementById('auth-status').innerText = "Ошибка: " + error.message;
+            else handleUserSession(data.user);
+        }
+
+        function handleUserSession(user) {
+            myLogin = user.email.split('@')[0];
+            document.getElementById('auth-screen').classList.add('hidden');
+            if (!mySavedName) {
+                document.getElementById('name-screen').classList.remove('hidden');
+            } else {
+                startGame();
+            }
+        }
+
+        function saveName() {
+            const name = document.getElementById('pName').value.trim();
+            if (!name) return alert("Введите имя!");
+            mySavedName = name;
+            localStorage.setItem('quiz_player_name', name);
+            document.getElementById('name-screen').classList.add('hidden');
             startGame();
         }
-    }
 
-    function saveName() {
-        const name = document.getElementById('pName').value.trim();
-        if (!name) return alert("Введите имя!");
-        mySavedName = name;
-        localStorage.setItem('quiz_player_name', name);
-        document.getElementById('name-screen').classList.add('hidden');
-        startGame();
-    }
+        function editName() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('name-screen').classList.remove('hidden');
+            document.getElementById('pName').value = mySavedName;
+        }
 
-    function editName() {
-        document.getElementById('game-screen').classList.add('hidden');
-        document.getElementById('name-screen').classList.remove('hidden');
-        document.getElementById('pName').value = mySavedName;
-    }
+        function startGame() {
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('display-name').innerText = mySavedName;
+        }
 
-    function startGame() {
-        document.getElementById('game-screen').classList.remove('hidden');
-        document.getElementById('display-name').innerText = mySavedName;
-    }
+        // ОТПРАВКА ОТВЕТА
+        async function send() {
+            if (hasSentAnswer) return; // Если уже отвечал — выходим
 
-    // ОТПРАВКА ОТВЕТА
-    async function send() {
-        if (hasSentAnswer) return; // Страховка
+            const input = document.getElementById('pAns');
+            const btn = document.getElementById('sendBtn');
+            const text = input.value.trim();
+            if(!text) return;
 
-        const input = document.getElementById('pAns');
-        const btn = document.getElementById('sendBtn');
-        const text = input.value.trim();
-        if(!text) return;
-
-        hasSentAnswer = true; // Блокируем до конца раунда
-        btn.disabled = true; 
-        document.getElementById('status').innerText = "Ответ принят! Жди следующий трек.";
-        
-        const fullName = `${currentLvlPrefix}${mySavedName} (${myLogin})`;
-        
-        await supabaseClient.from('quiz_chat').insert([
-            { player_name: fullName, message: text }
-        ]);
-    }
-
-    const channel = supabaseClient.channel('quiz_chat');
-
-    // 1. Сброс раунда (когда админ переключает трек)
-    channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'quiz_chat' }, () => {
-        hasSentAnswer = false; // ТЕПЕРЬ МОЖНО СНОВА ОТВЕЧАТЬ
-        document.getElementById('sendBtn').disabled = true;
-        document.getElementById('pAns').value = "";
-        document.getElementById('status').innerText = "Новый трек! Жди кнопку.";
-        document.getElementById('lvl-badge').innerText = "ОЖИДАНИЕ ТРЕКА";
-        currentLvlPrefix = "";
-        clearInterval(localTimerId);
-        document.getElementById('player-timer').innerText = "00";
-        document.getElementById('player-timer').classList.remove('timer-low');
-    });
-
-    // 2. Получение сигнала таймера
-    channel.on('broadcast', { event: 'start_timer' }, (payload) => {
-        const sec = payload.payload.sec;
-        currentLvlPrefix = payload.payload.lvl || ""; 
-
-        if (sec > 0) {
-            // Разблокируем кнопку только если ответ еще не был дан в этом раунде
-            if (!hasSentAnswer) {
-                document.getElementById('sendBtn').disabled = false;
-                document.getElementById('status').innerText = "Кнопка активна! Пиши!";
-            } else {
-                document.getElementById('status').innerText = "Ты уже ответил в этом раунде.";
-            }
+            hasSentAnswer = true; // Ставим флаг блокировки
+            btn.disabled = true; 
+            document.getElementById('status').innerText = "Ответ принят! Жди следующий трек.";
             
-            document.getElementById('lvl-badge').innerText = currentLvlPrefix ? "АКТИВЕН " + currentLvlPrefix : "ПОЛНАЯ ВЕРСИЯ";
-            startLocalTimer(sec);
-        } else {
-            stopGameAction();
+            // Формируем имя с префиксом LVL
+            const fullName = `${currentLvlPrefix}${mySavedName} (${myLogin})`;
+            
+            await supabaseClient.from('quiz_chat').insert([
+                { player_name: fullName, message: text }
+            ]);
         }
-    }).subscribe();
 
-    function stopGameAction() {
-        clearInterval(localTimerId);
-        document.getElementById('sendBtn').disabled = true;
-        document.getElementById('player-timer').innerText = "00";
-        if (!hasSentAnswer) {
-            document.getElementById('status').innerText = "Время вышло!";
-        }
-    }
+        const channel = supabaseClient.channel('quiz_chat');
 
-    function startLocalTimer(seconds) {
-        clearInterval(localTimerId);
-        let left = seconds;
-        const timerEl = document.getElementById('player-timer');
-        timerEl.classList.remove('timer-low');
-        timerEl.innerText = left < 10 ? '0' + left : left;
+        // 1. СБРОС (когда админ переключает трек - DELETE)
+        channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'quiz_chat' }, () => {
+            hasSentAnswer = false; // СБРАСЫВАЕМ ФЛАГ ОТВЕТА
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('pAns').value = "";
+            document.getElementById('status').innerText = "Новый раунд. Жди кнопку!";
+            document.getElementById('lvl-badge').innerText = "ОЖИДАНИЕ ТРЕКА";
+            currentLvlPrefix = "";
+            clearInterval(localTimerId);
+            document.getElementById('player-timer').innerText = "00";
+            document.getElementById('player-timer').classList.remove('timer-low');
+        });
 
-        localTimerId = setInterval(() => {
-            left--;
-            if (left <= 0) {
-                stopGameAction();
+        // 2. СИГНАЛ ТАЙМЕРА (BROADCAST)
+        channel.on('broadcast', { event: 'start_timer' }, (payload) => {
+            const sec = payload.payload.sec;
+            currentLvlPrefix = payload.payload.lvl || ""; 
+
+            if (sec > 0) {
+                // Разблокируем только если игрок еще НЕ отвечал в этом раунде
+                if (!hasSentAnswer) {
+                    document.getElementById('sendBtn').disabled = false;
+                    document.getElementById('status').innerText = "Кнопка активна! Пиши!";
+                } else {
+                    document.getElementById('status').innerText = "Ты уже ответил в этом раунде.";
+                }
+                
+                document.getElementById('lvl-badge').innerText = currentLvlPrefix ? "АКТИВЕН " + currentLvlPrefix : "ПОЛНАЯ ВЕРСИЯ";
+                startLocalTimer(sec);
             } else {
-                timerEl.innerText = left < 10 ? '0' + left : left;
-                if (left <= 5) timerEl.classList.add('timer-low');
+                stopGameAction();
             }
-        }, 1000);
-    }
-</script>
+        }).subscribe();
+
+        function stopGameAction() {
+            clearInterval(localTimerId);
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('player-timer').innerText = "00";
+            if (!hasSentAnswer) {
+                document.getElementById('status').innerText = "Время вышло!";
+            }
+        }
+
+        function startLocalTimer(seconds) {
+            clearInterval(localTimerId);
+            let left = seconds;
+            const timerEl = document.getElementById('player-timer');
+            timerEl.classList.remove('timer-low');
+            timerEl.innerText = left < 10 ? '0' + left : left;
+
+            localTimerId = setInterval(() => {
+                left--;
+                if (left <= 0) {
+                    stopGameAction();
+                } else {
+                    timerEl.innerText = left < 10 ? '0' + left : left;
+                    if (left <= 5) timerEl.classList.add('timer-low');
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
