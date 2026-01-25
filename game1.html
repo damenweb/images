@@ -283,36 +283,64 @@
     }
 
     function handlePlay(type) {
-        if (!playlist[currentIndex]) return;
-        clearTimeout(playTimeout);
-        const row = playlist[currentIndex];
-        const videoId = extractVideoId(row[0].toString());
-        const startSec = (type === 3) ? (parseInt(row[2]) || 0) : (parseInt(row[2 + type]) || 0);
-        const durations = [parseFloat(document.getElementById('time-0').value), parseFloat(document.getElementById('time-1').value), parseFloat(document.getElementById('time-2').value), 60];
-        const timers = [20, 25, 30, 60];
-        currentDuration = durations[type];
-        ytPlayer.loadVideoById({ videoId: videoId, startSeconds: startSec });
-        runTimer(timers[type]);
-    }
+    if (!playlist[currentIndex]) return;
+    clearTimeout(playTimeout);
+    const row = playlist[currentIndex];
+    const videoId = extractVideoId(row[0].toString());
+    const startSec = (type === 3) ? (parseInt(row[2]) || 0) : (parseInt(row[2 + type]) || 0);
+    
+    const durations = [
+        parseFloat(document.getElementById('time-0').value), 
+        parseFloat(document.getElementById('time-1').value), 
+        parseFloat(document.getElementById('time-2').value), 
+        60
+    ];
+    const timers = [20, 25, 30, 60];
+    
+    // Определяем префикс LVL для передачи игрокам
+    let lvlPrefix = "";
+    if (type === 0) lvlPrefix = "LVL1 ";
+    else if (type === 1) lvlPrefix = "LVL2 ";
+    else if (type === 2) lvlPrefix = "LVL3 ";
 
-    function runTimer(seconds) {
-        // --- ДОБАВЬ ЭТУ СТРОКУ ---
-        supabaseClient.channel('quiz_chat').send({
-          type: 'broadcast',
-          event: 'start_timer',
-          payload: { sec: seconds }
-        });
-        // ... далее твой обычный код таймера ...
-        clearInterval(timerId);
-        let left = seconds;
-        document.getElementById('timer-display').innerText = left;
-        timerId = setInterval(() => {
-            left--;
-            document.getElementById('timer-display').innerText = left < 10 ? '0' + left : left;
-            if (left <= 5 && left > 0) triggerBeep(440, 0.1);
-            if (left <= 0) { clearInterval(timerId); triggerBeep(600, 0.8); }
-        }, 1000);
-    }
+    currentDuration = durations[type];
+    ytPlayer.loadVideoById({ videoId: videoId, startSeconds: startSec });
+    
+    // Передаем префикс в функцию таймера
+    runTimer(timers[type], lvlPrefix);
+}
+
+function runTimer(seconds, lvl = "") {
+    // Отправляем сигнал игрокам с уровнем сложности
+    supabaseClient.channel('quiz_chat').send({
+      type: 'broadcast',
+      event: 'start_timer',
+      payload: { 
+          sec: seconds,
+          lvl: lvl // Передаем LVL1, LVL2 или LVL3
+      }
+    });
+
+    clearInterval(timerId);
+    let timeLeft = seconds;
+    document.getElementById('timer-display').innerText = timeLeft;
+    
+    timerId = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timer-display').innerText = timeLeft < 10 ? '0' + timeLeft : timeLeft;
+        if (timeLeft <= 5 && timeLeft > 0) triggerBeep(440, 0.1);
+        if (timeLeft <= 0) { 
+            clearInterval(timerId); 
+            triggerBeep(600, 0.8); 
+            // По окончании таймера можно послать сигнал блокировки (sec: 0)
+            supabaseClient.channel('quiz_chat').send({
+                type: 'broadcast',
+                event: 'start_timer',
+                payload: { sec: 0, lvl: "" }
+            });
+        }
+    }, 1000);
+}
 
     function triggerBeep(freq = 600, duration = 0.4) {
         try {
