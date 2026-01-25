@@ -7,18 +7,27 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { background: #121212; color: white; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .box { background: #1e1e1e; padding: 25px; border-radius: 15px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .box { background: #1e1e1e; padding: 25px; border-radius: 15px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; }
         input { width: 100%; padding: 15px; margin: 10px 0; background: #2b2b2b; border: 1px solid #444; color: white; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; background: #0078d4; border: none; color: white; font-weight: bold; border-radius: 8px; font-size: 16px; cursor: pointer; }
+        button { width: 100%; padding: 15px; background: #0078d4; border: none; color: white; font-weight: bold; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 5px; }
+        .btn-edit { background: transparent; color: #888; font-size: 12px; text-decoration: underline; margin-top: 10px; width: auto; padding: 5px; }
         button:disabled { background: #333; color: #777; cursor: not-allowed; }
         .hidden { display: none; }
         #status { margin-top: 15px; font-size: 0.9em; color: #888; }
+
+        /* СТИЛИ ТАЙМЕРА */
+        #player-timer {
+            font-size: 48px; font-weight: bold; color: #0078d4; 
+            margin-bottom: 10px; font-family: monospace;
+            transition: color 0.3s;
+        }
+        .timer-low { color: #ff4d4d !important; }
     </style>
 </head>
 <body>
 
     <div id="auth-screen" class="box">
-        <h2>Вход в игру</h2>
+        <h2>Вход</h2>
         <input type="email" id="email" placeholder="Логин (player1@quiz.com)">
         <input type="password" id="password" placeholder="Пароль">
         <button onclick="signIn()">Войти</button>
@@ -26,16 +35,20 @@
     </div>
 
     <div id="name-screen" class="box hidden">
-        <h2>Представься</h2>
-        <input type="text" id="pName" placeholder="Твое имя для таблицы...">
-        <button onclick="saveName()">Начать игру</button>
+        <h2>Как тебя зовут?</h2>
+        <input type="text" id="pName" placeholder="Введи имя...">
+        <button onclick="saveName()">Сохранить</button>
     </div>
 
     <div id="game-screen" class="box hidden">
-        <h2 id="display-name">Приятной игры!</h2>
+        <div id="player-timer">00</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span id="display-name" style="font-weight: bold; color: #0078d4;"></span>
+            <button class="btn-edit" onclick="editName()">Изм.</button>
+        </div>
         <input type="text" id="pAns" placeholder="Твой ответ...">
-        <button id="sendBtn" onclick="send()">Отправить</button>
-        <div id="status">Введи ответ и нажми кнопку</div>
+        <button id="sendBtn" onclick="send()">Отправить ответ</button>
+        <div id="status">Жду твой ответ...</div>
     </div>
 
     <script>
@@ -44,26 +57,24 @@
         const supabaseClient = supabase.createClient(S_URL, S_KEY);
 
         let mySavedName = localStorage.getItem('quiz_player_name');
+        let myLogin = "";
+        let localTimerId;
 
-        // Проверка авторизации при загрузке
         window.onload = async () => {
             const { data: { user } } = await supabaseClient.auth.getUser();
-            if (user) showCorrectScreen(user);
+            if (user) handleUserSession(user);
         };
 
         async function signIn() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-            
-            if (error) {
-                document.getElementById('auth-status').innerText = "Ошибка: " + error.message;
-            } else {
-                showCorrectScreen(data.user);
-            }
+            if (error) document.getElementById('auth-status').innerText = "Ошибка: " + error.message;
+            else handleUserSession(data.user);
         }
 
-        function showCorrectScreen(user) {
+        function handleUserSession(user) {
+            myLogin = user.email.split('@')[0];
             document.getElementById('auth-screen').classList.add('hidden');
             if (!mySavedName) {
                 document.getElementById('name-screen').classList.remove('hidden');
@@ -81,9 +92,15 @@
             startGame();
         }
 
+        function editName() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('name-screen').classList.remove('hidden');
+            document.getElementById('pName').value = mySavedName;
+        }
+
         function startGame() {
             document.getElementById('game-screen').classList.remove('hidden');
-            document.getElementById('display-name').innerText = "Привет, " + mySavedName + "!";
+            document.getElementById('display-name').innerText = mySavedName;
         }
 
         async function send() {
@@ -93,17 +110,49 @@
             if(!text) return;
 
             btn.disabled = true;
-            document.getElementById('status').innerText = "Ответ принят! Жди следующий трек...";
-            
-            await supabaseClient.from('quiz_chat').insert([{ player_name: mySavedName, message: text }]);
+            document.getElementById('status').innerText = "Ответ улетел!";
+            const fullName = `${mySavedName} (${myLogin})`;
+            await supabaseClient.from('quiz_chat').insert([{ player_name: fullName, message: text }]);
         }
 
-        // Realtime сброс
-        supabaseClient.channel('any').on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'quiz_chat' }, () => {
+        // КАНАЛ СВЯЗИ
+        const channel = supabaseClient.channel('quiz_chat');
+
+        // 1. Слушаем сброс (удаление строк в базе)
+        channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'quiz_chat' }, () => {
             document.getElementById('sendBtn').disabled = false;
             document.getElementById('pAns').value = "";
-            document.getElementById('status').innerText = "Новый раунд! Можно писать.";
+            document.getElementById('status').innerText = "Новый раунд!";
+            // Сбрасываем таймер принудительно при смене трека
+            clearInterval(localTimerId);
+            document.getElementById('player-timer').innerText = "00";
+            document.getElementById('player-timer').classList.remove('timer-low');
+        });
+
+        // 2. Слушаем Broadcast таймера от админа
+        channel.on('broadcast', { event: 'start_timer' }, (payload) => {
+            startLocalTimer(payload.payload.sec);
         }).subscribe();
+
+        function startLocalTimer(seconds) {
+            clearInterval(localTimerId);
+            let left = seconds;
+            const timerEl = document.getElementById('player-timer');
+            timerEl.classList.remove('timer-low');
+            
+            timerEl.innerText = left < 10 ? '0' + left : left;
+
+            localTimerId = setInterval(() => {
+                left--;
+                timerEl.innerText = left < 10 ? '0' + left : left;
+                
+                if (left <= 5) timerEl.classList.add('timer-low');
+                
+                if (left <= 0) {
+                    clearInterval(localTimerId);
+                }
+            }, 1000);
+        }
     </script>
 </body>
 </html>
