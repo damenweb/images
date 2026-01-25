@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { background: #121212; color: white; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .box { background: #1e1e1e; padding: 25px; border-radius: 15px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input { width: 100%; padding: 15px; margin: 10px 0; background: #2b2b2b; border: 1px solid #444; color: white; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #0078d4; border: none; color: white; font-weight: bold; border-radius: 8px; font-size: 16px; cursor: pointer; }
+        button:disabled { background: #333; color: #777; cursor: not-allowed; }
+        .hidden { display: none; }
+        #status { margin-top: 15px; font-size: 0.9em; color: #888; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-screen" class="box">
+        <h2>Вход в игру</h2>
+        <input type="email" id="email" placeholder="Логин (player1@quiz.com)">
+        <input type="password" id="password" placeholder="Пароль">
+        <button onclick="signIn()">Войти</button>
+        <div id="auth-status" style="color: #ff4d4d; margin-top: 10px;"></div>
+    </div>
+
+    <div id="name-screen" class="box hidden">
+        <h2>Представься</h2>
+        <input type="text" id="pName" placeholder="Твое имя для таблицы...">
+        <button onclick="saveName()">Начать игру</button>
+    </div>
+
+    <div id="game-screen" class="box hidden">
+        <h2 id="display-name">Приятной игры!</h2>
+        <input type="text" id="pAns" placeholder="Твой ответ...">
+        <button id="sendBtn" onclick="send()">Отправить</button>
+        <div id="status">Введи ответ и нажми кнопку</div>
+    </div>
+
+    <script>
+        const S_URL = 'https://gatadttzyeusozvkwvai.supabase.co';
+        const S_KEY = 'sb_publishable_cwXp1mw42C6sDXoeszY8sw_lYrAAefY';
+        const supabaseClient = supabase.createClient(S_URL, S_KEY);
+
+        let mySavedName = localStorage.getItem('quiz_player_name');
+
+        // Проверка авторизации при загрузке
+        window.onload = async () => {
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (user) showCorrectScreen(user);
+        };
+
+        async function signIn() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            
+            if (error) {
+                document.getElementById('auth-status').innerText = "Ошибка: " + error.message;
+            } else {
+                showCorrectScreen(data.user);
+            }
+        }
+
+        function showCorrectScreen(user) {
+            document.getElementById('auth-screen').classList.add('hidden');
+            if (!mySavedName) {
+                document.getElementById('name-screen').classList.remove('hidden');
+            } else {
+                startGame();
+            }
+        }
+
+        function saveName() {
+            const name = document.getElementById('pName').value.trim();
+            if (!name) return alert("Введите имя!");
+            mySavedName = name;
+            localStorage.setItem('quiz_player_name', name);
+            document.getElementById('name-screen').classList.add('hidden');
+            startGame();
+        }
+
+        function startGame() {
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('display-name').innerText = "Привет, " + mySavedName + "!";
+        }
+
+        async function send() {
+            const input = document.getElementById('pAns');
+            const btn = document.getElementById('sendBtn');
+            const text = input.value.trim();
+            if(!text) return;
+
+            btn.disabled = true;
+            document.getElementById('status').innerText = "Ответ принят! Жди следующий трек...";
+            
+            await supabaseClient.from('quiz_chat').insert([{ player_name: mySavedName, message: text }]);
+        }
+
+        // Realtime сброс
+        supabaseClient.channel('any').on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'quiz_chat' }, () => {
+            document.getElementById('sendBtn').disabled = false;
+            document.getElementById('pAns').value = "";
+            document.getElementById('status').innerText = "Новый раунд! Можно писать.";
+        }).subscribe();
+    </script>
+</body>
+</html>
