@@ -6,17 +6,16 @@
     <title>Live Messages</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        #messages { width: 100%; max-width: 500px; display: flex; flex-direction: column-reverse; gap: 10px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .input-area { margin-bottom: 30px; background: #1e1e1e; padding: 20px; border-radius: 10px; display: flex; gap: 10px; }
+        input { padding: 10px; border-radius: 5px; border: 1px solid #333; background: #2b2b2b; color: white; }
+        button { padding: 10px 20px; background: #3ecf8e; border: none; border-radius: 5px; cursor: pointer; color: black; font-weight: bold; }
+        button:hover { background: #36b87d; }
+        #messages { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 10px; }
         .msg { background: #1e1e1e; padding: 15px; border-radius: 10px; border-left: 4px solid #3ecf8e; animation: fadeIn 0.3s ease; }
-        .msg b { color: #3ecf8e; display: block; margin-bottom: 5px; }
-        .msg small { color: #666; font-size: 0.8em; }
+        .msg b { color: #3ecf8e; display: block; margin-bottom: 5px; font-size: 1.1em; }
+        .msg small { color: #666; font-size: 0.8em; margin-top: 5px; display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        /* Стили для формы отправки (чтобы ты мог проверить работу) */
-        .input-area { margin-bottom: 30px; background: #1e1e1e; padding: 20px; border-radius: 10px; }
-        input { padding: 8px; border-radius: 5px; border: none; margin-right: 5px; }
-        button { padding: 8px 15px; background: #3ecf8e; border: none; border-radius: 5px; cursor: pointer; color: black; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -25,34 +24,40 @@
 
     <div class="input-area">
         <input type="text" id="author" placeholder="Имя">
-        <input type="text" id="text" placeholder="Сообщение">
-        <button onclick="sendMessage()">Отправить</button>
+        <input type="text" id="messageText" placeholder="Сообщение">
+        <button onclick="sendNewMessage()">Отправить</button>
     </div>
 
-    <div id="messages">Загрузка сообщений...</div>
+    <div id="messages">Загрузка...</div>
 
     <script>
-        // 1. НАСТРОЙКИ (Вставь свои данные сюда)
-        const SUPABASE_URL = 'https://gatadttzyeusozvkwvai.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_cwXp1mw42C6sDXoeszY8sw_lYrAAefY';
+        // ТВОИ ДАННЫЕ СЕЙЧАС ТАКИЕ:
+        const S_URL = 'https://gatadttzyeusozvkwvai.supabase.co';
+        const S_KEY = 'sb_publishable_cwXp1mw42C6sDXoeszY8sw_lYrAAefY'; // Тот, что на скрине 2
         
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // Создаем клиент с другим именем переменной, чтобы не было конфликта
+        const supabaseClient = supabase.createClient(S_URL, S_KEY);
 
-        // 2. ФУНКЦИЯ ПОЛУЧЕНИЯ СООБЩЕНИЙ
+        // Функция загрузки
         async function fetchMessages() {
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('messages')
                 .select('*')
-                .order('created_at', { ascending: false })
-                .limit(20);
+                .order('created_at', { ascending: false });
 
-            if (error) console.error('Ошибка:', error);
-            else renderMessages(data);
+            if (error) {
+                console.error('Ошибка получения:', error);
+            } else {
+                renderMessages(data);
+            }
         }
 
-        // 3. ОТРИСОВКА НА ЭКРАНЕ
         function renderMessages(list) {
             const container = document.getElementById('messages');
+            if (list.length === 0) {
+                container.innerHTML = 'Сообщений пока нет.';
+                return;
+            }
             container.innerHTML = list.map(m => `
                 <div class="msg">
                     <b>${m.author || 'Аноним'}</b>
@@ -62,25 +67,33 @@
             `).join('');
         }
 
-        // 4. РЕАЛЬНОЕ ВРЕМЯ (Слушаем изменения в базе)
-        supabase
-            .channel('public:messages')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-                console.log('Новое сообщение!', payload);
-                fetchMessages(); // Обновляем список при появлении записи
+        // Функция отправки
+        async function sendNewMessage() {
+            const authorInput = document.getElementById('author');
+            const textInput = document.getElementById('messageText');
+            
+            const { error } = await supabaseClient
+                .from('messages')
+                .insert([{ author: authorInput.value, text: textInput.value }]);
+            
+            if (error) {
+                alert('Ошибка отправки! Проверь SQL-политики (RLS).');
+                console.error(error);
+            } else {
+                textInput.value = '';
+                fetchMessages(); 
+            }
+        }
+
+        // Realtime подписка
+        supabaseClient
+            .channel('any')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+                fetchMessages();
             })
             .subscribe();
 
-        // 5. ОТПРАВКА (Для теста)
-        async function sendMessage() {
-            const author = document.getElementById('author').value;
-            const text = document.getElementById('text').value;
-            
-            await supabase.from('messages').insert([{ author, text }]);
-            document.getElementById('text').value = ''; // Очистить поле
-        }
-
-        // Загрузить при старте
+        // Первый запуск
         fetchMessages();
     </script>
 </body>
