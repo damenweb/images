@@ -349,6 +349,13 @@
     }
 
     async function resetGame() {
+        // --- ДОБАВЬ ЭТО: Сигнал игрокам сбросить таймер ---
+    supabaseClient.channel('quiz_chat').send({
+      type: 'broadcast',
+      event: 'start_timer',
+      payload: { sec: 0 } 
+    });
+    // ------------------------------------------------
         clearInterval(timerId);
         clearTimeout(playTimeout);
         lastChanges = {}; 
