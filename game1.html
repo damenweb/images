@@ -3,20 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Music Quiz Pro - Ultimate Edition</title>
+    <title>Music Quiz Pro - Live Sync</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
-            --gold: #D4AF37; --silver: #B0B0B0; --bronze: #A0522D;
-            --dark-bg: #121212; --panel-bg: #1e1e1e; --text-color: #ffffff;
-            --accent: #0078d4; --border: #333333;
+            --gold: #D4AF37;
+            --silver: #B0B0B0;
+            --bronze: #A0522D;
+            --dark-bg: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #ffffff;
+            --accent: #0078d4;
+            --border: #333333;
         }
 
         body {
-            font-family: 'Roboto', sans-serif; background-color: var(--dark-bg);
-            color: var(--text-color); margin: 0; display: flex; height: 100vh; overflow: hidden;
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
 
         /* Игровая зона */
@@ -26,6 +36,7 @@
             position: relative;
         }
 
+        /* Списки игроков */
         .players-section {
             width: 40%; padding: 20px; background-color: var(--panel-bg);
             display: flex; flex-direction: column; overflow-y: auto;
@@ -72,48 +83,58 @@
             border: none; cursor: pointer; font-weight: bold; font-size: 15px; border-radius: 2px; min-width: 160px;
         }
 
-        /* ЧАТ БАРЫ (ТВОЙ ЗАПРОС) */
-        #chat-sidebar {
-            position: fixed; left: 20px; bottom: 20px;
-            display: flex; flex-direction: column-reverse; gap: 8px;
-            z-index: 9999; pointer-events: none;
+        .points-info {
+            width: 80%; margin-top: 20px; padding-top: 20px; border-top: 1px solid #333; text-align: center;
         }
+        .points-table { display: flex; justify-content: center; gap: 30px; margin-bottom: 15px; font-size: 14px; color: #aaa; }
+        .points-table span b { color: #fff; }
+        .double-points-note { color: var(--gold); font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
 
-        .chat-bar {
-            background: var(--accent); color: white; padding: 12px 15px;
-            border-radius: 6px; font-size: 14px; cursor: pointer; pointer-events: auto;
-            width: 150px; /* Фиксированная короткая ширина */
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            transition: width 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28), background 0.3s;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-
-        .chat-bar .msg-text { display: none; margin-left: 10px; font-weight: bold; color: #fff; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 10px; }
-        
-        .chat-bar.open { 
-            width: auto; /* Расширяется только на ширину ответа */
-            max-width: 600px;
-            background: #333; border: 1px solid var(--gold); 
-        }
-        .chat-bar.open .msg-text { display: inline-block; }
-
-        /* Игроки в списке */
         .player-row {
             display: flex; align-items: center; gap: 8px;
             background: #252525; padding: 6px 10px; margin-bottom: 6px; border-radius: 4px;
         }
         .player-name {
             flex: 1; background: #121212; border: 1px solid #444;
-            color: #fff; padding: 6px; border-radius: 2px; font-size: 14px;
+            color: #fff; padding: 6px; border-radius: 2px; font-size: 14px; font-family: 'Roboto', sans-serif;
         }
         .score-input {
             width: 50px; background: #000; border: 1px solid var(--accent);
-            color: #fff; padding: 6px 0; text-align: center; font-weight: bold;
+            color: #fff; padding: 6px 0; text-align: center; font-weight: bold; font-size: 14px;
         }
-        .btn-pts { border: none; padding: 5px; font-size: 12px; font-weight: bold; cursor: pointer; border-radius: 2px; min-width: 32px; }
+        .points-group { display: flex; gap: 3px; }
+        .btn-pts { border: none; padding: 5px; font-size: 12px; font-weight: bold; cursor: pointer; border-radius: 2px; min-width: 32px; font-family: 'Roboto', sans-serif; }
         .btn-zero { background: #444; color: #fff; }
+        .btn-del { background: none; border: none; color: #555; cursor: pointer; padding: 0 5px; font-size: 16px; }
+        .btn-undo { background: #444; color: #fff; border: none; cursor: pointer; padding: 5px 8px; border-radius: 2px; font-size: 12px; }
+
+        /* СТИЛИ ЧАТА (ОБНОВЛЕННЫЕ) */
+        #chat-sidebar {
+            position: fixed; left: 20px; bottom: 20px;
+            display: flex; flex-direction: column-reverse; gap: 8px;
+            z-index: 9999; pointer-events: none;
+        }
+        .chat-bar {
+            background: rgba(0, 120, 212, 0.95); color: white; padding: 12px 15px;
+            border-radius: 6px; font-size: 14px; cursor: pointer; pointer-events: auto;
+            width: 150px; /* Изначальная ширина */
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            transition: width 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28), background 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);
+            animation: slideIn 0.4s ease-out;
+        }
+        .chat-bar .msg-text { display: none; margin-left: 15px; font-weight: bold; color: #fff; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 10px; }
         
+        .chat-bar.open { 
+            background: #333; border-color: var(--gold); 
+            width: auto; /* Расширяется только на ширину контента */
+            max-width: 600px;
+            text-overflow: clip;
+        }
+        .chat-bar.open .msg-text { display: inline-block; }
+        
+        @keyframes slideIn { from { transform: translateX(-110%); } to { transform: translateX(0); } }
+
         #player-api-container { position: absolute; left: -9999px; }
     </style>
 </head>
@@ -125,16 +146,16 @@
     <div class="upload-area">
         <input type="file" id="excel-file" hidden accept=".xlsx, .xls">
         <button class="btn-action" onclick="document.getElementById('excel-file').click()">Файл</button>
-        <input type="text" id="gsheets-url" class="player-name" style="width: 150px; font-size: 11px;" placeholder="Google Sheets CSV">
-        <button class="btn-action" onclick="loadFromGSheets()">Загрузить</button>
+        <input type="text" id="gsheets-url" class="player-name" style="width: 200px; font-size: 11px;" placeholder="Google Sheets CSV URL">
+        <button class="btn-action" onclick="loadFromGSheets()">Загрузить по ссылке</button>
     </div>
 
     <div class="add-player-area">
-        <button class="btn-action" onclick="addPlayer()">+ Игрок</button>
+        <button class="btn-action" onclick="addPlayer()">+ Добавить участника</button>
         <div class="settings-row">
-            <input type="number" step="0.1" id="time-0" class="time-input" value="1.5">
-            <input type="number" step="1" id="time-1" class="time-input" value="5">
-            <input type="number" step="1" id="time-2" class="time-input" value="12">
+            <input type="number" step="0.1" id="time-0" class="time-input" value="1.5" oninput="updateTimeUI()">
+            <input type="number" step="1" id="time-1" class="time-input" value="5" oninput="updateTimeUI()">
+            <input type="number" step="1" id="time-2" class="time-input" value="12" oninput="updateTimeUI()">
         </div>
     </div>
 
@@ -142,18 +163,27 @@
     <div id="timer-display">00</div>
     
     <div class="play-row">
-        <button id="play-btn-0" class="btn-main gold" onclick="handlePlay(0)">1.5 сек</button>
-        <button id="play-btn-1" class="btn-main silver" onclick="handlePlay(1)">5 сек</button>
-        <button id="play-btn-2" class="btn-main bronze" onclick="handlePlay(2)">12 сек</button>
+        <button id="play-btn-0" class="btn-main gold" onclick="handlePlay(0)">▶ 1.5 сек</button>
+        <button id="play-btn-1" class="btn-main silver" onclick="handlePlay(1)">▶ 5 сек</button>
+        <button id="play-btn-2" class="btn-main bronze" onclick="handlePlay(2)">▶ 12 сек</button>
         <button class="btn-main full-play" onclick="handlePlay(3)">▶</button>
     </div>
 
     <div id="answer-box">******</div>
 
     <div class="nav-row">
-        <button class="btn-nav" onclick="changeTrack(-1)">⏮</button>
+        <button class="btn-nav" style="min-width: 60px;" onclick="changeTrack(-1)">⏮</button>
         <button id="toggle-ans-btn" class="btn-nav" style="background: var(--accent)" onclick="toggleAnswer()">Показать ответ</button>
-        <button class="btn-nav" onclick="changeTrack(1)">⏭</button>
+        <button class="btn-nav" style="min-width: 60px;" onclick="changeTrack(1)">⏭</button>
+    </div>
+
+    <div class="points-info">
+        <div class="points-table">
+            <span id="label-0">1.5 сек: <b>4 очка</b></span>
+            <span id="label-1">5 сек: <b>2 очка</b></span>
+            <span id="label-2">12 сек: <b>1 очко</b></span>
+        </div>
+        <div class="double-points-note">Исполнитель + название песни = ОЧКИ УДВАИВАЮТСЯ</div>
     </div>
 </div>
 
@@ -164,150 +194,215 @@
 <div id="player-api-container"><div id="yt-player"></div></div>
 
 <script>
-    // --- НАСТРОЙКИ (ВСТАВЬ СВОИ) ---
     const S_URL = 'https://gatadttzyeusozvkwvai.supabase.co';
-    const S_KEY = 'sb_publishable_...'; 
+    const S_KEY = 'sb_publishable_cwXp1mw42C6sDXoeszY8sw_lYrAAefY';
     const supabaseClient = supabase.createClient(S_URL, S_KEY);
 
-    let playlist = [], currentIndex = 0, ytPlayer, timerId, playTimeout, isAnswerShown = false, currentDur = 0;
-    let lastChanges = {};
+    let playlist = [];
+    let currentIndex = 0;
+    let ytPlayer;
+    let timerId;
+    let lastChanges = {}; 
+    let playTimeout; 
+    let currentDuration = 0;
+    let isAnswerShown = false;
 
-    // REALTIME ЧАТ
-    supabaseClient.channel('quiz').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+    // --- ЛОГИКА ЧАТА ---
+    supabaseClient.channel('quiz_chat').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quiz_chat' }, payload => {
+        displayChatBar(payload.new);
+        triggerBeep(880, 0.1); 
+    }).subscribe();
+
+    function displayChatBar(data) {
         const sidebar = document.getElementById('chat-sidebar');
-        if (document.getElementById(`bar-${payload.new.player_name}`)) return;
+        // Используем player_name целиком как ID
+        const safeId = btoa(unescape(encodeURIComponent(data.player_name))).replace(/=/g, "");
+        if (document.getElementById(`bar-${safeId}`)) return;
 
         const bar = document.createElement('div');
         bar.className = 'chat-bar';
-        bar.id = `bar-${payload.new.player_name}`;
-        bar.innerHTML = `<span>👤 ${payload.new.player_name}</span> <span class="msg-text">➔ ${payload.new.message}</span>`;
+        bar.id = `bar-${safeId}`;
+        // В data.player_name уже лежит "Имя (логин)" из player.html
+        bar.innerHTML = `<span>👤 ${data.player_name}</span> <span class="msg-text">➔ ${data.message}</span>`;
         bar.onclick = () => bar.classList.toggle('open');
         sidebar.appendChild(bar);
-        triggerBeep(880, 0.1);
-    }).subscribe();
+    }
 
-    // YOUTUBE API
+    // --- ИГРОВАЯ ЛОГИКА ---
+    function updateTimeUI() {
+        const t0 = document.getElementById('time-0').value;
+        const t1 = document.getElementById('time-1').value;
+        const t2 = document.getElementById('time-2').value;
+        document.getElementById('play-btn-0').innerText = `▶ ${t0} сек`;
+        document.getElementById('play-btn-1').innerText = `▶ ${t1} сек`;
+        document.getElementById('play-btn-2').innerText = `▶ ${t2} сек`;
+        document.getElementById('label-0').innerHTML = `${t0} сек: <b>4 очка</b>`;
+        document.getElementById('label-1').innerHTML = `${t1} сек: <b>2 очка</b>`;
+        document.getElementById('label-2').innerHTML = `${t2} сек: <b>1 очко</b>`;
+    }
+
     function onYouTubeIframeAPIReady() {
         ytPlayer = new YT.Player('yt-player', {
             height: '1', width: '1',
-            playerVars: { 'autoplay': 0, 'controls': 0 },
-            events: { 'onStateChange': (e) => {
-                if(e.data == YT.PlayerState.PLAYING && currentDur > 0) {
-                    clearTimeout(playTimeout);
-                    playTimeout = setTimeout(() => ytPlayer.pauseVideo(), currentDur * 1000);
-                }
-            }}
+            playerVars: { 'autoplay': 0, 'controls': 0, 'origin': window.location.origin },
+            events: { 'onReady': () => console.log("System Ready"), 'onStateChange': onPlayerStateChange }
         });
+    }
+
+    function onPlayerStateChange(event) {
+        if (event.data == YT.PlayerState.PLAYING) {
+            clearTimeout(playTimeout);
+            playTimeout = setTimeout(() => { ytPlayer.pauseVideo(); }, currentDuration * 1000);
+        }
+    }
+
+    async function loadFromGSheets() {
+        const url = document.getElementById('gsheets-url').value;
+        if (!url) return alert("Введите ссылку!");
+        try {
+            const response = await fetch(url);
+            const csvText = await response.text();
+            const workbook = XLSX.read(csvText, { type: 'string' });
+            processData(workbook);
+            alert("Таблица загружена!");
+        } catch (e) { alert("Ошибка загрузки. Проверьте публикацию CSV."); }
+    }
+
+    document.getElementById('excel-file').addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = (event) => processData(XLSX.read(event.target.result, { type: 'binary' }));
+        reader.readAsBinaryString(e.target.files[0]);
+    });
+
+    function processData(workbook) {
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        playlist = XLSX.utils.sheet_to_json(sheet, { header: 1 })
+                    .filter(row => row[0] && row[0].toString().includes('http'));
+        currentIndex = 0;
+        resetGame();
     }
 
     function handlePlay(type) {
         if (!playlist[currentIndex]) return;
+        clearTimeout(playTimeout);
         const row = playlist[currentIndex];
-        const videoId = extractId(row[0].toString());
-        const startSec = type === 3 ? (parseInt(row[2]) || 0) : (parseInt(row[2 + type]) || 0);
-        const durs = [parseFloat(document.getElementById('time-0').value), parseFloat(document.getElementById('time-1').value), parseFloat(document.getElementById('time-2').value), 999];
+        const videoId = extractVideoId(row[0].toString());
+        const startSec = (type === 3) ? (parseInt(row[2]) || 0) : (parseInt(row[2 + type]) || 0);
+        const durations = [parseFloat(document.getElementById('time-0').value), parseFloat(document.getElementById('time-1').value), parseFloat(document.getElementById('time-2').value), 60];
         const timers = [20, 25, 30, 60];
+        currentDuration = durations[type];
+        ytPlayer.loadVideoById({ videoId: videoId, startSeconds: startSec });
+        runTimer(timers[type]);
+    }
 
-        currentDur = durs[type];
-        ytPlayer.loadVideoById({ videoId, startSeconds: startSec });
-        
-        // Таймер
-        let left = timers[type];
+    function runTimer(seconds) {
         clearInterval(timerId);
+        let left = seconds;
         document.getElementById('timer-display').innerText = left;
         timerId = setInterval(() => {
             left--;
-            document.getElementById('timer-display').innerText = left < 10 ? '0'+left : left;
-            if(left <= 5 && left > 0) triggerBeep(440, 0.1);
-            if(left <= 0) { clearInterval(timerId); triggerBeep(600, 0.8); }
+            document.getElementById('timer-display').innerText = left < 10 ? '0' + left : left;
+            if (left <= 5 && left > 0) triggerBeep(440, 0.1);
+            if (left <= 0) { clearInterval(timerId); triggerBeep(600, 0.8); }
         }, 1000);
     }
 
-    async function changeTrack(dir) {
-        currentIndex = Math.max(0, Math.min(playlist.length - 1, currentIndex + dir));
-        resetUI();
-        await supabaseClient.from('messages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    function triggerBeep(freq = 600, duration = 0.4) {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        } catch (e) {}
     }
 
-    function resetUI() {
-        clearInterval(timerId);
-        clearTimeout(playTimeout);
-        document.getElementById('chat-sidebar').innerHTML = '';
-        document.getElementById('timer-display').innerText = "00";
-        document.getElementById('answer-box').innerText = "******";
-        isAnswerShown = false;
-        document.getElementById('track-counter').innerText = `Песня ${playlist.length > 0 ? currentIndex + 1 : 0}/${playlist.length}`;
-        if(ytPlayer) ytPlayer.stopVideo();
-        document.querySelectorAll('.btn-pts').forEach(b => { b.disabled = false; b.style.opacity = "1"; });
-    }
-
-    function toggleAnswer() {
-        const box = document.getElementById('answer-box');
-        if(!isAnswerShown) {
-            box.innerText = playlist[currentIndex] ? playlist[currentIndex][1] : "Нет данных";
-            isAnswerShown = true;
-        } else {
-            box.innerText = "******";
-            isAnswerShown = false;
-        }
-    }
-
-    function extractId(url) {
+    function extractVideoId(url) {
         const m = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=)?(.+)/);
         return m ? m[1].split('&')[0] : null;
     }
 
-    // РАБОТА С ФАЙЛАМИ И ИГРОКАМИ
-    document.getElementById('excel-file').addEventListener('change', (e) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            const wb = XLSX.read(ev.target.result, { type: 'binary' });
-            playlist = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }).filter(r => r[0] && r[0].includes('http'));
-            resetUI();
-        };
-        reader.readAsBinaryString(e.target.files[0]);
-    });
+    function toggleAnswer() {
+        const box = document.getElementById('answer-box');
+        const btn = document.getElementById('toggle-ans-btn');
+        if (!isAnswerShown) {
+            box.innerText = playlist[currentIndex] ? (playlist[currentIndex][1] || "Название отсутствует") : "******";
+            btn.innerText = "Скрыть ответ"; btn.style.background = "#d43737"; isAnswerShown = true;
+        } else {
+            box.innerText = "******"; btn.innerText = "Показать ответ"; btn.style.background = "var(--accent)"; isAnswerShown = false;
+        }
+    }
 
-    async function loadFromGSheets() {
-        const url = document.getElementById('gsheets-url').value;
-        if(!url) return;
-        const res = await fetch(url);
-        const text = await res.text();
-        const wb = XLSX.read(text, { type: 'string' });
-        playlist = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }).filter(r => r[0] && r[0].includes('http'));
-        resetUI();
+    function changeTrack(dir) {
+        currentIndex = Math.max(0, Math.min(playlist.length - 1, currentIndex + dir));
+        resetGame();
+    }
+
+    async function resetGame() {
+        clearInterval(timerId);
+        clearTimeout(playTimeout);
+        lastChanges = {}; 
+        isAnswerShown = false;
+
+        document.getElementById('chat-sidebar').innerHTML = '';
+        await supabaseClient.from('quiz_chat').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+        const counter = document.getElementById('track-counter');
+        const total = playlist.length;
+        counter.innerText = `Песня ${total > 0 ? currentIndex + 1 : 0}/${total}`;
+        document.getElementById('timer-display').innerText = "00";
+        document.getElementById('answer-box').innerText = "******";
+        const btn = document.getElementById('toggle-ans-btn');
+        btn.innerText = "Показать ответ"; btn.style.background = "var(--accent)";
+        
+        document.querySelectorAll('.btn-pts').forEach(btn => {
+            btn.disabled = false; btn.style.opacity = "1"; btn.style.cursor = "pointer";
+        });
+        if(ytPlayer) ytPlayer.stopVideo();
     }
 
     function addPlayer() {
         const id = Date.now();
         const row = `
             <div class="player-row" id="p-${id}">
-                <button onclick="this.parentElement.remove()">✕</button>
+                <button class="btn-del" onclick="this.parentElement.remove()">✕</button>
+                <button class="btn-undo" onclick="undoScore('${id}')" title="Undo">↶</button>
                 <input type="text" class="player-name" placeholder="Игрок">
                 <input type="number" class="score-input" value="0" id="s-${id}">
-                <div class="btn-group">
+                <div class="points-group">
                     <button class="btn-pts btn-zero" onclick="modScore('${id}', 0, this)">0</button>
                     <button class="btn-pts gold" onclick="modScore('${id}', 4, this)">+4</button>
+                    <button class="btn-pts gold" onclick="modScore('${id}', 8, this)">x2</button>
                     <button class="btn-pts silver" onclick="modScore('${id}', 2, this)">+2</button>
+                    <button class="btn-pts silver" onclick="modScore('${id}', 4, this)">x2</button>
                     <button class="btn-pts bronze" onclick="modScore('${id}', 1, this)">+1</button>
+                    <button class="btn-pts bronze" onclick="modScore('${id}', 2, this)">x2</button>
                 </div>
             </div>`;
         document.getElementById('players-list').insertAdjacentHTML('beforeend', row);
     }
 
-    function modScore(id, v, btn) {
-        const input = document.getElementById('s-'+id);
-        input.value = parseInt(input.value) + v;
-        btn.parentElement.querySelectorAll('button').forEach(b => { b.disabled = true; b.style.opacity = "0.3"; });
+    function modScore(id, val, btnElement) {
+        const input = document.getElementById('s-' + id);
+        lastChanges[id] = val; 
+        input.value = parseInt(input.value) + val;
+        btnElement.parentElement.querySelectorAll('.btn-pts').forEach(btn => {
+            btn.disabled = true; btn.style.opacity = "0.3"; btn.style.cursor = "not-allowed";
+        });
     }
 
-    function triggerBeep(f, d) {
-        const a = new (window.AudioContext || window.webkitAudioContext)();
-        const o = a.createOscillator();
-        const g = a.createGain();
-        o.frequency.value = f; g.gain.exponentialRampToValueAtTime(0.01, a.currentTime + d);
-        o.connect(g); g.connect(a.destination);
-        o.start(); o.stop(a.currentTime + d);
+    function undoScore(id) {
+        if (lastChanges[id] !== undefined) {
+            const input = document.getElementById('s-' + id);
+            input.value = parseInt(input.value) - lastChanges[id];
+            delete lastChanges[id];
+            document.getElementById('p-' + id).querySelectorAll('.btn-pts').forEach(btn => {
+                btn.disabled = false; btn.style.opacity = "1"; btn.style.cursor = "pointer";
+            });
+        }
     }
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
