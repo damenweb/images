@@ -296,6 +296,17 @@
     }
 
     function runTimer(seconds) {
+        // --- ДОБАВЬ ЭТУ СТРОКУ ---
+        supabaseClient.channel('quiz_chat').send({
+          type: 'broadcast',
+          event: 'start_timer',
+          payload: { sec: seconds }
+        });
+        // ------------------------
+    
+        clearInterval(timerId);
+        let left = seconds;
+        // ... далее твой обычный код таймера ...
         clearInterval(timerId);
         let left = seconds;
         document.getElementById('timer-display').innerText = left;
