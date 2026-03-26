@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Damen Bynder Auditor - Production Tool</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 40px; background: #f0f4f8; color: #2c3e50; }
+        .app-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); max-width: 1100px; margin: auto; }
+        .header { border-bottom: 2px solid #005596; margin-bottom: 25px; padding-bottom: 10px; }
+        .input-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; }
+        select, input { width: 100%; padding: 12px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px; }
+        button { width: 100%; padding: 14px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-blue { background: #005596; color: white; }
+        .btn-green { background: #2f855a; color: white; margin-top: 10px; }
+        .btn-excel { background: #276749; color: white; margin-top: 20px; width: auto; }
+        .error-box { background: #fff5f5; color: #c53030; padding: 15px; border-left: 4px solid #c53030; margin: 20px 0; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #edf2f7; font-size: 13px; }
+        th { background: #005596; color: white; text-transform: uppercase; letter-spacing: 0.05em; }
+        tr:hover { background: #f7fafc; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="app-card">
+    <div class="header">
+        <h2 style="margin:0; color:#005596;">Damen Bynder Media Interface</h2>
+    </div>
+
+    <!-- AUTH SECTION -->
+    <div v-if="!isAuthorized">
+        <div class="input-group">
+            <label>Auth Method</label>
+            <select v-model="authMethod">
+                <option value="cookies">Manual Cookie (bynder=...;)</option>
+                <option value="token">Bearer Token</option>
+                <option value="oauth">OAuth 2.0</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>{{ authMethod === 'cookies' ? 'Enter "bynder" Cookie Value' : 'Enter Token' }}</label>
+            <input type="password" v-model="userKey" placeholder="Paste value here...">
+            <small v-if="authMethod === 'cookies'" style="color:#718096">Copy the value of 'bynder' cookie from F12 > Application > Cookies</small>
+        </div>
+
+        <button @click="verifyConnection" :disabled="loading" class="btn-blue">
+            {{ loading ? 'Verifying Bynder Access...' : 'Connect' }}
+        </button>
+
+        <div v-if="error" class="error-box">
+            <strong>Access Refused:</strong> {{ error }}
+        </div>
+    </div>
+
+    <!-- CONTENT SECTION -->
+    <div v-else>
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#f0fff4; padding:15px; border-radius:6px; border:1px solid #c6f6d5;">
+            <span style="color:#22543d">✅ Connected Successfully (Status 200)</span>
+            <button @click="isAuthorized = false" style="width:auto; padding:5px 15px; background:#e2e8f0; color:#4a5568;">Switch Auth</button>
+        </div>
+
+        <button @click="runMediaScan" :disabled="loading" class="btn-green">
+            {{ loading ? 'Fetching Data...' : '🚀 Start Media Scan' }}
+        </button>
+
+        <div v-if="results.length > 0">
+            <button @click="downloadExcel" class="btn-excel">📥 Download Excel Report</button>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Image ID</th>
+                        <th>Page</th>
+                        <th>Block</th>
+                        <th>Width</th>
+                        <th>Height</th>
+                        <th>Usage (Storyblok)</th>
+                        <th>Restrictions</th>
+                        <th>Watermark</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="item in results" :key="item.id">
+                        <td><strong>{{ item.id }}</strong></td>
+                        <td>{{ item.page }}</td>
+                        <td>{{ item.block }}</td>
+                        <td>{{ item.width }}</td>
+                        <td>{{ item.height }}</td>
+                        <td>{{ item.usage }}</td>
+                        <td>{{ item.restrictions }}</td>
+                        <td>{{ item.watermark }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref } = Vue;
+
+createApp({
+    setup() {
+        const isAuthorized = ref(false);
+        const authMethod = ref('cookies');
+        const userKey = ref('');
+        const error = ref('');
+        const loading = ref(false);
+        const results = ref([]);
+
+        const API_BASE = 'https://medialibrary.damen.com/api/v4/media/';
+
+        // Формирование заголовков как в Postman
+        const buildRequestOptions = () => {
+            const options = { headers: {} };
+            
+            if (authMethod.value === 'cookies') {
+                // Чистим ввод пользователя и приводим к формату bynder=CODE;
+                let cleanKey = userKey.value.trim().replace(/;$/, '');
+                if (!cleanKey.startsWith('bynder=')) {
+                    cleanKey = `bynder=${cleanKey}`;
+                }
+                // ВАЖНО: GitHub Pages (JS) может блокировать заголовок 'Cookie'. 
+                // Если Мартин настроил сервер Bynder на прием кастомных заголовков, можно попробовать:
+                options.headers['Cookie'] = `${cleanKey};`;
+            } else {
+                options.headers['Authorization'] = `Bearer ${userKey.value}`;
+            }
+            return options;
+        };
+
+        const verifyConnection = async () => {
+            loading.value = true;
+            error.value = '';
+            try {
+                const response = await fetch(`${API_BASE}?limit=1`, buildRequestOptions());
+                
+                if (response.status === 200) {
+                    isAuthorized.value = true;
+                } else {
+                    error.value = `Server returned ${response.status} ${response.statusText}. Check your cookie/token.`;
+                }
+            } catch (err) {
+                error.value = `Network/CORS Error: The browser blocked the request. You might need to allow 'medialibrary.damen.com' in CORS settings or run this from a Damen-approved domain.`;
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        const runMediaScan = async () => {
+            loading.value = true;
+            try {
+                const response = await fetch(`${API_BASE}?limit=50`, buildRequestOptions());
+                if (!response.ok) throw new Error("Failed to fetch data");
+                
+                const data = await response.json();
+
+                results.value = data
+                    .filter(a => a.type === 'image')
+                    .map(a => ({
+                        id: a.id,
+                        page: "to be added",
+                        block: "to be added",
+                        width: a.width || 0,
+                        height: a.height || 0,
+                        usage: (a.property_MediaUsage && a.property_MediaUsage.includes('Storyblok')) ? 'yes' : 'no',
+                        restrictions: a.property_Restrictions || 'None',
+                        watermark: (a.watermarked == 1 || a.watermarked === 'yes' || a.watermarked === true) ? 'yes' : 'no'
+                    }));
+            } catch (err) {
+                error.value = "Error during scan: " + err.message;
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        const downloadExcel = () => {
+            const ws = XLSX.utils.json_to_sheet(results.value);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "BynderAudit");
+            
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["Image ID", "Page", "Block", "Width", "Height", "Media Usage (Storyblok)", "Restrictions", "Watermark"]
+            ], { origin: "A1" });
+
+            XLSX.writeFile(wb, `Bynder_Audit_${new Date().toISOString().slice(0,10)}.xlsx`);
+        };
+
+        return { isAuthorized, authMethod, userKey, error, loading, results, verifyConnection, runMediaScan, downloadExcel };
+    }
+}).mount('#app');
+</script>
+
+</body>
+</html>
